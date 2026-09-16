@@ -1,0 +1,2119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>SMC Backtester v10</title>
+<style>
+/* ===================== THEME (TradingView-style dark) ===================== */
+:root{
+  --bg:#131722; --panel:#1e222d; --panel2:#161a25; --border:#2a2e39;
+  --text:#d1d4dc; --text-dim:#787b86;
+  --up:#089981; --down:#f23645;
+  --accent:#2962ff; --entry:#2962ff; --sl:#f23645; --tp:#089981;
+  --ob:#ff9800; --fvg:#ab47bc; --bos:#2962ff; --choch:#ff6d00; --liq:#ffd600; --tl:#26c6da;
+  --warn:#ffb300;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%; margin:0; overscroll-behavior:none;}
+body{background:var(--bg); color:var(--text); font-family:-apple-system,Roboto,Arial,sans-serif; font-size:13px;}
+button{font-family:inherit; border:none; cursor:pointer; color:var(--text); background:#2a2e39; border-radius:6px;}
+button:active{filter:brightness(1.3);}
+input,select,textarea{font-family:inherit; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px;}
+label{font-size:11px; color:var(--text-dim); display:block; margin:6px 0 2px;}
+
+/* ===================== APP SHELL ===================== */
+#app{position:fixed; inset:0; display:flex; flex-direction:column;}
+#topbar{
+  display:flex; align-items:center; gap:6px; padding:6px 8px;
+  background:var(--panel); border-bottom:1px solid var(--border); flex-shrink:0;
+  overflow-x:auto; white-space:nowrap;
+}
+#topbar .pairName{font-weight:700; color:var(--accent); font-size:14px; padding:0 4px;}
+.tf-chip{padding:6px 10px; font-size:12px; background:#2a2e39; border-radius:5px; flex-shrink:0;}
+.tf-chip.active{background:var(--accent); color:#fff; font-weight:700;}
+.tf-chip.disabled{opacity:0.32; pointer-events:none;}
+#tfBar{
+  display:flex; align-items:center; gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch;
+  background:var(--panel2); border-bottom:1px solid var(--border); padding:5px 8px; flex-shrink:0;
+}
+#tfBar .tf-chip{border-radius:0; margin:0; padding:6px 12px; border-right:1px solid var(--border);}
+#tfBar .tf-chip:first-child{padding-left:6px;}
+#tfBar .tf-chip:last-child{border-right:none;}
+#topbar .spacer{flex:1;}
+.icon-btn{width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-size:16px; background:#2a2e39; border-radius:6px; flex-shrink:0;}
+.icon-btn.active{background:var(--accent);}
+
+#mainRow{flex:1; display:flex; flex-direction:column; min-height:0;}
+#chartArea{flex:1; position:relative; min-width:0;}\n#chartCanvas{touch-action:none;}
+#chartCanvas{position:absolute; inset:0; width:100%; height:100%; touch-action:none; display:block;}
+
+/* placement mode banner */
+#modeBanner{
+  position:absolute; top:8px; left:50%; transform:translateX(-50%);
+  background:rgba(41,98,255,0.95); color:#fff; padding:6px 14px; border-radius:20px;
+  font-size:12px; font-weight:600; display:none; align-items:center; gap:8px; z-index:20;
+}
+#modeBanner button{background:rgba(255,255,255,0.25); color:#fff; padding:2px 8px; border-radius:12px; font-size:11px;}
+
+/* floating replay + draw controls over chart */
+#floatControls{position:absolute; bottom:8px; left:8px; right:8px; display:flex; justify-content:space-between; gap:6px; z-index:15; pointer-events:none;}
+#floatControls > div{display:flex; gap:6px; pointer-events:auto;}
+.fbtn{min-width:40px; height:40px; padding:0 10px; background:rgba(30,34,45,0.92); border:1px solid var(--border); border-radius:8px; font-size:16px;}
+.fbtn.small{font-size:11px; min-width:34px; height:34px;}
+#btnCrosshair.active{background:var(--accent); color:#fff;}
+#crosshairInfo{position:absolute; top:8px; left:8px; z-index:14; background:rgba(30,34,45,.92); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:10px; color:var(--text); display:none; pointer-events:none; white-space:nowrap;}
+#btnCrosshair.active{background:var(--accent); color:#fff;}
+#crosshairInfo{position:absolute; top:8px; left:8px; z-index:14; background:rgba(30,34,45,.92); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:10px; color:var(--text); display:none; pointer-events:none; white-space:nowrap;}
+
+#toolStrip{
+  position:absolute; bottom:56px; left:8px; right:8px; z-index:16;
+  display:none; gap:6px; overflow-x:auto; background:rgba(20,23,31,0.95);
+  border:1px solid var(--border); border-radius:8px; padding:6px;
+}
+#toolStrip button{flex-shrink:0; padding:8px 10px; font-size:11px; white-space:nowrap; background:#2a2e39;}
+#toolStrip button.active{background:var(--accent); color:#fff;}
+
+/* ===================== DRAWER (bottom sheet portrait / side panel landscape) ===================== */
+#drawer{
+  background:var(--panel); border-top:1px solid var(--border);
+  display:flex; flex-direction:column; flex-shrink:0;
+  max-height:46vh; overflow:hidden; transition:max-height .15s ease;
+}
+#drawer.collapsed{max-height:0; border-top:none;}
+#drawerTabs{display:flex; border-bottom:1px solid var(--border); flex-shrink:0;}
+#drawerTabs button{flex:1; padding:9px 4px; background:transparent; border-radius:0; font-size:11px; color:var(--text-dim); border-bottom:2px solid transparent;}
+#drawerTabs button.active{color:var(--text); border-bottom:2px solid var(--accent); font-weight:600;}
+#drawerContent{flex:1; overflow-y:auto; padding:10px;}
+.dpanel{display:none;}
+.dpanel.active{display:block;}
+
+.row2{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;}
+.card{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px; margin-bottom:8px;}
+.bigbtn{padding:14px; font-size:14px; font-weight:700; border-radius:8px; width:100%; display:inline-block; text-align:center; cursor:pointer; box-sizing:border-box;}
+/* File-picker overlay pattern: a relatively-positioned wrapper holds a plain
+   visible button-styled div (pointer-events:none, purely decorative) with a
+   REAL <input type="file"> stacked on top of it, sized to fill the wrapper
+   and set to opacity:0. The input is what actually receives the tap - this
+   is the most reliable way to get Android to open its native file picker,
+   more reliable than label[for] or a JS .click() call. */
+.filepicker-wrap{position:relative; width:100%; display:block;}
+.filepicker-visible{pointer-events:none;}
+.filepicker-input{position:absolute; inset:0; width:100%; height:100%; margin:0; padding:0; opacity:0.01; cursor:pointer; z-index:10; display:block; -webkit-appearance:none; appearance:none; border:0; background:transparent; touch-action:manipulation;}
+.statbox{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px; text-align:center;}
+.statbox .v{font-weight:700; font-size:15px;}
+.statbox .l{font-size:10px; color:var(--text-dim); margin-top:2px;}
+.pos{color:var(--up);} .neg{color:var(--down);}
+
+table{width:100%; border-collapse:collapse; font-size:11px;}
+th,td{padding:5px 6px; border-bottom:1px solid var(--border); text-align:left; white-space:nowrap;}
+th{color:var(--text-dim); font-weight:600; position:sticky; top:0; background:var(--panel);}
+.journalWrap{overflow-x:auto;}
+
+.toast{position:fixed; bottom:70px; left:50%; transform:translateX(-50%); background:#2a2e39; border:1px solid var(--accent); padding:9px 16px; border-radius:8px; font-size:12px; z-index:999; display:none;}
+
+/* ===================== RESPONSIVE LANDSCAPE: full-screen chart =====================
+   Keep the chart as the main full-screen surface in landscape. The drawer does
+   NOT become a side panel, so the chart is never squeezed to one side. */
+@media (orientation:landscape){
+  #app{width:100vw; height:100dvh; min-height:100vh;}
+  #topbar{padding:3px 8px; min-height:42px;}
+  #tfBar{padding:3px 8px; min-height:34px;}
+  .tf-chip{padding:5px 9px; font-size:12px;}
+  #mainRow{flex-direction:column; min-height:0; flex:1;}
+  #chartArea{min-width:0; min-height:0; width:100%; flex:1;}
+  #toolStrip{bottom:54px; left:8px; right:8px; max-height:46px;}
+  #floatControls{bottom:6px; left:8px; right:8px;}
+  #drawer{
+    position:absolute; left:0; right:0; bottom:0;
+    width:100%; height:42vh; max-height:42vh;
+    border-top:1px solid var(--border); border-left:none; z-index:30;
+  }
+  #drawer.collapsed{width:100%; height:0; max-height:0; border-top:none;}
+  #drawerContent{min-height:0;}
+}
+
+@media (orientation:landscape) and (max-height:420px){
+  #topbar{min-height:38px; padding:2px 6px;}
+  #tfBar{min-height:31px; padding:2px 6px;}
+  .icon-btn{width:32px; height:32px; font-size:15px;}
+  #toolStrip{bottom:49px;}
+  .fbtn{height:36px; min-width:36px;}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ===================== TOP BAR ===================== -->
+  <div id="topbar">
+    <div class="pairName" id="pairLabel">GBPUSD</div>
+    <div class="spacer"></div>
+    <div class="icon-btn" data-tab="draw" title="Drawing tools">✏️</div>
+    <div class="icon-btn" data-tab="trade" title="Trade panel">💰</div>
+    <div class="icon-btn" data-tab="journal" title="Journal">📒</div>
+    <div class="icon-btn" data-tab="stats" title="Stats">📊</div>
+    <div class="icon-btn" data-tab="settings" title="Settings">⚙️</div>
+  </div>
+
+  <!-- ===================== TIMEFRAME BAR (horizontally scrollable) ===================== -->
+  <div id="tfBar">
+    <div class="tf-chip" data-tf="1440">1D</div>
+    <div class="tf-chip" data-tf="240">4H</div>
+    <div class="tf-chip" data-tf="120">2H</div>
+    <div class="tf-chip active" data-tf="60">1H</div>
+    <div class="tf-chip" data-tf="30">30M</div>
+    <div class="tf-chip" data-tf="15">15M</div>
+    <div class="tf-chip" data-tf="5">5M</div>
+    <div class="tf-chip" data-tf="3">3M</div>
+    <div class="tf-chip" data-tf="1">1M</div>
+  </div>
+
+  <div id="mainRow">
+    <!-- ===================== CHART ===================== -->
+    <div id="chartArea">
+      <canvas id="chartCanvas"></canvas>
+
+      <div id="modeBanner"><span id="modeBannerText"></span><button id="modeCancelBtn">Cancel</button></div>
+      <div id="crosshairInfo"></div>
+      <div id="crosshairInfo"></div>
+
+      <div id="toolStrip">
+        <button data-tool="orderblock">OB</button>
+        <button data-tool="fvg">FVG</button>
+        <button data-tool="bos">BOS</button>
+        <button data-tool="choch">CHoCH</button>
+        <button data-tool="liquidity">EQH/EQL</button>
+        <button data-tool="hline">H-Line</button>
+        <button data-tool="trendline">Trend</button>
+        <button data-tool="text">Text</button>
+        <button data-tool="edit">✋ Edit</button><button data-tool="delete">🗑 Delete</button>
+      </div>
+
+      <div id="floatControls">
+        <div>
+          <button class="fbtn small" id="btnDrawToggle">✏️</button>
+          <button class="fbtn small" id="btnPrev">◀︎</button>
+          <button class="fbtn small" id="btnNext">▶︎</button>
+        </div>
+        <div>
+          <button class="fbtn small" id="btnRandom">🎲</button>
+          <button class="fbtn small" id="btnResetView">⤢</button>
+          <button class="fbtn small" id="btnCrosshair" title="Crosshair">⌖</button>
+          <button class="fbtn small" id="btnCrosshair" title="Crosshair">⌖</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== DRAWER ===================== -->
+    <div id="drawer" class="collapsed">
+      <div id="drawerTabs">
+        <button data-tab="draw">Draw</button>
+        <button data-tab="trade">Trade</button>
+        <button data-tab="journal">Journal</button>
+        <button data-tab="stats">Stats</button>
+        <button data-tab="settings">Settings</button>
+      </div>
+      <div id="drawerContent">
+
+        <!-- DRAW TAB (help text; actual tools are the floating strip) -->
+        <div class="dpanel" id="panel-draw">
+          <div class="card">
+            <b>Drawing tools</b>
+            <p style="color:var(--text-dim); font-size:12px; line-height:1.5;">
+            Tap the pencil (✏️) button over the chart to open the tool strip.<br><br>
+            <b>OB / FVG</b>: tap two opposite corners to draw a zone box.<br>
+            <b>BOS / CHoCH</b>: tap two points to draw a labeled break line.<br>
+            <b>EQH/EQL</b>: tap two points at the same swing level for a liquidity marker.<br>
+            <b>H-Line</b>: one tap sets a price level across the whole chart.<br>
+            <b>Trend</b>: tap two points for a free trendline.<br>
+            <b>Text</b>: one tap, then type a note.<br>
+            <b>✋ Edit</b>: drag a drawing, its corners, or its endpoints to adjust it later. Entry/SL/TP lines can also be dragged directly up/down.<br><b>🗑 Delete</b>: tap an existing drawing to remove it.<br><br>
+            Drawings are anchored to exact time+price, so they stay correctly placed while you smooth-zoom, side-scroll/pan, or replay.
+            </p>
+          </div>
+        </div>
+
+        <!-- TRADE TAB -->
+        <div class="dpanel" id="panel-trade">
+          <div id="tradeFormWrap"></div>
+        </div>
+
+        <!-- JOURNAL TAB -->
+        <div class="dpanel" id="panel-journal">
+          <div class="journalWrap"><table id="journalTable"></table></div>
+        </div>
+
+        <!-- STATS TAB -->
+        <div class="dpanel" id="panel-stats">
+          <div id="statsWrap"></div>
+        </div>
+
+        <!-- SETTINGS TAB -->
+        <div class="dpanel" id="panel-settings">
+          <div id="settingsWrap"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================================
+   SMC BACKTESTER - core state
+   ========================================================================= */
+function toast(msg,ms){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block';
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.style.display='none', ms||1800); }
+
+const state = {
+  pair: 'GBPUSD',
+  rawCandles: [],      // {t,o,h,l,c} finest resolution imported
+  nativeResSec: 60,
+  timeframe: 15,        // minutes
+  cursorTime: null,     // unix sec "now" of replay
+  resampled: [],        // cached candles for current timeframe up to cursorTime
+  view: { startIdx:0, count:80 }, // window into `resampled`
+  // TradingView-like price-scale state. zoom=1 means automatic fit; after
+  // dragging the right price scale, the vertical range is preserved while
+  // horizontal zoom/pan continues independently.
+  priceScale: { zoom:1, center:null, span:null },
+  drawings: [],         // {id,type,points:[{t,p}], text, done}
+  inputMode: 'pan',     // 'pan' | 'draw:<type>' | 'place:entry'|'place:sl'|'place:tp'
+  pendingAnchor: null,
+  selectedDrawingId: null,
+  crosshair: { enabled:false, x:null, y:null, candleIndex:null },
+  account: { balance:10000, riskPercent:1, contractSize:100000 },
+  trade: null,          // open trade object
+  journal: [],
+  tradeCounter: 0,
+};
+
+function pairPipSize(){ return /JPY/i.test(state.pair) ? 0.01 : 0.0001; }
+
+/* ---------- persistence: journal/settings autosave ---------- */
+const AUTOSAVE_KEY = 'smcBacktesterAutosave';
+function autosave(){
+  try{
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
+      pair: state.pair, account: state.account,
+      journal: state.journal, tradeCounter: state.tradeCounter
+    }));
+  }catch(e){ /* storage full or unavailable - non-fatal */ }
+}
+function loadAutosave(){
+  try{
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    state.pair = d.pair || state.pair;
+    state.account = d.account || state.account;
+    state.journal = d.journal || [];
+    state.tradeCounter = d.tradeCounter || 0;
+  }catch(e){}
+}
+
+/* ---------- FULL SESSION SAVE/LOAD (offline, localStorage) ----------
+   Unlike autosave() above (which only keeps journal/account so you never
+   lose your trade log), this is the full "pick up exactly where I left
+   off" snapshot: imported OHLC data, replay cursor, timeframe, chart
+   zoom/pan, every drawing, the open trade, journal and account settings.
+*/
+const SESSION_KEY = 'smcBacktesterSession';
+function saveSession(){
+  try{
+    const payload = {
+      pair: state.pair,
+      rawCandles: state.rawCandles,
+      nativeResSec: state.nativeResSec,
+      timeframe: state.timeframe,
+      cursorTime: state.cursorTime,
+      view: state.view,
+      priceScale: state.priceScale,
+      drawings: state.drawings,
+      trade: state.trade,
+      account: state.account,
+      journal: state.journal,
+      tradeCounter: state.tradeCounter,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+    toast('Session saved to this device (offline)');
+  }catch(e){
+    const quota = e && (e.name==='QuotaExceededError' || e.code===22);
+    toast(quota
+      ? 'Save failed: too much data for browser storage - try importing a shorter date range'
+      : 'Save failed: '+(e&&e.message?e.message:'storage error'));
+  }
+}
+function loadSession(){
+  let d;
+  try{
+    const raw = localStorage.getItem(SESSION_KEY);
+    if(!raw){ toast('No saved session found on this device'); return; }
+    d = JSON.parse(raw);
+  }catch(e){ toast('Saved session is corrupted and could not be loaded'); return; }
+
+  state.pair = d.pair || state.pair;
+  state.rawCandles = Array.isArray(d.rawCandles) ? d.rawCandles : [];
+  state.nativeResSec = d.nativeResSec || detectNativeResSec(state.rawCandles);
+  state.cursorTime = d.cursorTime!=null ? d.cursorTime : (state.rawCandles.length ? state.rawCandles[state.rawCandles.length-1].t : null);
+  // copy (not alias) - rebuildResampled() mutates state.view.startIdx in
+  // place, so if state.view were the same object as d.view, that mutation
+  // would silently corrupt the very value we're about to restore below.
+  state.view = { startIdx: (d.view && d.view.startIdx) || 0, count: (d.view && d.view.count) || 80 };
+  state.priceScale = {
+    zoom: Number(d.priceScale && d.priceScale.zoom) > 0 ? Number(d.priceScale.zoom) : 1,
+    center: Number.isFinite(d.priceScale && d.priceScale.center) ? Number(d.priceScale.center) : null,
+    span: Number.isFinite(d.priceScale && d.priceScale.span) ? Number(d.priceScale.span) : null
+  };
+  const desiredStartIdx = state.view.startIdx;
+  state.drawings = Array.isArray(d.drawings) ? d.drawings : [];
+  state.trade = d.trade || null;
+  state.account = d.account || state.account;
+  state.journal = Array.isArray(d.journal) ? d.journal : [];
+  state.tradeCounter = d.tradeCounter || 0;
+
+  document.getElementById('pairLabel').textContent = state.pair;
+  applyTimeframeAvailability();
+  state.timeframe = pickValidTimeframe(d.timeframe || 15);
+  document.querySelectorAll('.tf-chip').forEach(el=>{
+    el.classList.toggle('active', parseInt(el.dataset.tf,10)===state.timeframe);
+  });
+
+  rebuildResampled();
+  // rebuildResampled() auto-pins the view to the newest candles, which would
+  // discard the pan/zoom position we just restored - re-apply it now.
+  const maxStart = maxViewportStart();
+  state.view.startIdx = Math.max(0, Math.min(maxStart, desiredStartIdx));
+  resizeCanvas();
+  renderChart();
+  renderTradeForm();
+  renderJournal();
+  renderStats();
+  toast('Session loaded - data, cursor, drawings, trade and journal restored');
+}
+
+/* =========================================================================
+   CSV IMPORT + RESAMPLING
+   Expected columns: Date(+time), Open, High, Low, Close  (extra columns ok)
+   Date must include time for intraday timeframes, e.g. "2026-01-05 09:15"
+   or ISO "2026-01-05T09:15:00". Pure Unix-seconds timestamps also accepted.
+   ========================================================================= */
+// Auto-detect the field delimiter from a sample line - HistData ASCII uses
+// semicolons, generic exports typically use commas (occasionally tabs).
+function detectDelimiter(sampleLine){
+  const candidates = [';', ',', '\t'];
+  let best=',', bestCount=-1;
+  for(const d of candidates){
+    const count = sampleLine.split(d).length;
+    if(count>bestCount){ bestCount=count; best=d; }
+  }
+  return best;
+}
+
+// Parses HistData's compact "YYYYMMDD HHMMSS" (or "YYYYMMDDHHMMSS") field.
+// Uses Date.UTC explicitly so the literal date/time in the file is preserved
+// exactly regardless of the phone's local timezone (no silent DST/offset
+// shifting), which is what "preserve the actual timestamps" requires here.
+function parseHistDataDateTime(raw){
+  const cleaned = raw.trim().replace(/^"|"$/g,'');
+  const m = cleaned.match(/^(\d{4})(\d{2})(\d{2})[ T]?(\d{2})(\d{2})(\d{2})$/);
+  if(!m) return null;
+  const [,Y,Mo,D,H,Mi,S] = m;
+  return Math.floor(Date.UTC(+Y, +Mo-1, +D, +H, +Mi, +S)/1000);
+}
+
+// Turns raw CSV text into {t,o,h,l,c} candles. Handles:
+//  - the app's original simple format: Date,Open,High,Low,Close (comma, any
+//    Date() -parseable date/time string, or a raw unix timestamp)
+//  - HistData "Generic ASCII" M1 format: DATETIME;OPEN;HIGH;LOW;CLOSE;VOLUME
+//    where DATETIME is "YYYYMMDD HHMMSS" (semicolon-delimited, no header)
+//  - a variant with separate date and time columns (date;time;O;H;L;C)
+function parseCandleCSV(text){
+  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(!lines.length) return [];
+  const delim = detectDelimiter(lines[0]);
+  const out = [];
+
+  for(const line of lines){
+    const parts = line.split(delim).map(p=>p.trim());
+    if(!parts.length) continue;
+    if(/^date/i.test(parts[0])) continue; // header row, e.g. "Date,Open,..."
+    if(parts.length < 5) continue;
+
+    let t=null, o,h,l,c;
+
+    // Strategy A: HistData combined "YYYYMMDD HHMMSS" (or no-space variant)
+    // in the first field: DATETIME;O;H;L;C[;VOLUME]
+    t = parseHistDataDateTime(parts[0]);
+    if(t!=null){
+      o=parts[1]; h=parts[2]; l=parts[3]; c=parts[4];
+    }
+    // Strategy B: separate date + time columns: DATE;TIME;O;H;L;C[;VOLUME]
+    // (date like 2025.01.02 or 2025-01-02 or 20250102, time like 00:00 or 000000)
+    else if(parts.length>=6 && /^\d{4}[.\-]?\d{2}[.\-]?\d{2}$/.test(parts[0]) && /^\d{1,2}:?\d{2}(:?\d{2})?$/.test(parts[1])){
+      const dPart = parts[0].replace(/\./g,'-');
+      const tPart = parts[1].includes(':') ? parts[1] : parts[1].replace(/^(\d{2})(\d{2})(\d{2})?$/, (m,H,Mi,S)=>`${H}:${Mi}:${S||'00'}`);
+      const d = new Date(`${dPart}T${tPart}`);
+      if(!isNaN(d.getTime())){ t = Math.floor(d.getTime()/1000); o=parts[2]; h=parts[3]; l=parts[4]; c=parts[5]; }
+    }
+    // Strategy C (original behaviour): single date/time field, comma format
+    if(t==null){
+      const dateStr = parts[0];
+      if(/^\d+$/.test(dateStr)){
+        const n = parseInt(dateStr,10);
+        t = n > 2e10 ? Math.floor(n/1000) : n;
+      } else {
+        const d = new Date(dateStr.replace(' ','T'));
+        if(!isNaN(d.getTime())) t = Math.floor(d.getTime()/1000);
+      }
+      if(t!=null){ o=parts[1]; h=parts[2]; l=parts[3]; c=parts[4]; }
+    }
+
+    if(t==null) continue;
+    const O=parseFloat(o), H=parseFloat(h), L=parseFloat(l), C=parseFloat(c);
+    if([O,H,L,C].some(v=>!isFinite(v) || v<=0)) continue;
+    // Reject malformed OHLC rows that could destroy the chart price scale.
+    if(H < Math.max(O,C) || L > Math.min(O,C) || H < L) continue;
+    out.push({t,o:O,h:H,l:L,c:C});
+  }
+  out.sort((a,b)=>a.t-b.t);
+  // de-dup identical timestamps
+  const deduped=[];
+  for(const c of out){ if(!deduped.length || deduped[deduped.length-1].t!==c.t) deduped.push(c); }
+  return deduped;
+}
+
+// Detect the finest gap between consecutive candles (native resolution)
+function detectNativeResSec(candles){
+  if(candles.length < 2) return 60;
+  let minGap = Infinity;
+  for(let i=1;i<candles.length;i++){
+    const gap = candles[i].t - candles[i-1].t;
+    if(gap>0 && gap<minGap) minGap = gap;
+  }
+  return isFinite(minGap) ? minGap : 60;
+}
+
+// Binary search: index of first rawCandle with t > targetT (upper bound)
+function upperBoundTime(arr, targetT){
+  let lo=0, hi=arr.length;
+  while(lo<hi){ const mid=(lo+hi)>>1; if(arr[mid].t<=targetT) lo=mid+1; else hi=mid; }
+  return lo;
+}
+
+// Rebuild `state.resampled` for current timeframe, up to state.cursorTime.
+// Buckets are aligned to epoch (bucketStart = floor(t / dur) * dur), so all
+// timeframes share common boundaries and switching TF never reveals future.
+function rebuildResampled(){
+  const raw = state.rawCandles;
+  if(!raw.length || state.cursorTime==null){ state.resampled=[]; return; }
+  const durSec = state.timeframe*60;
+  const upto = upperBoundTime(raw, state.cursorTime); // exclusive end index
+  const out = [];
+  let bucket = null;
+  for(let i=0;i<upto;i++){
+    const c = raw[i];
+    const bStart = Math.floor(c.t/durSec)*durSec;
+    if(!bucket || bucket.t !== bStart){
+      if(bucket) out.push(bucket);
+      bucket = { t:bStart, o:c.o, h:c.h, l:c.l, c:c.c };
+    } else {
+      if(c.h>bucket.h) bucket.h=c.h;
+      if(c.l<bucket.l) bucket.l=c.l;
+      bucket.c = c.c;
+    }
+  }
+  if(bucket) out.push(bucket);
+  const oldLen = state.resampled.length;
+  const oldCount = Math.max(15, Number(state.view.count)||80);
+  const oldStart = Number(state.view.startIdx)||0;
+  // Follow replay only when the user was already viewing the right edge.
+  // If the user manually panned into history, stepping replay does not yank
+  // the chart back to the newest candle.
+  const wasFollowingReplay =
+    oldLen === 0 || oldStart >= Math.max(0, oldLen - oldCount - 2);
+
+  state.resampled = out;
+  state.view.count = Math.max(15, Math.min(out.length || oldCount, oldCount));
+  if(wasFollowingReplay){
+    state.view.startIdx = Math.max(0, out.length - state.view.count);
+  }else{
+    state.view.startIdx = oldStart;
+  }
+  clampViewport();
+}
+
+function setTimeframe(mins){
+  if(state.rawCandles.length){
+    const nativeMin = Math.max(1, Math.round(state.nativeResSec/60));
+    if(mins < nativeMin){
+      toast(`${formatTfLabel(mins)} is unavailable - your imported data's native resolution is ~${nativeMin}min, so genuine ${formatTfLabel(mins)} candles don't exist in it`, 3200);
+      return;
+    }
+  }
+  state.timeframe = mins;
+  document.querySelectorAll('.tf-chip').forEach(el=>{
+    el.classList.toggle('active', parseInt(el.dataset.tf,10)===mins);
+  });
+  rebuildResampled();
+  renderChart();
+}
+function formatTfLabel(mins){
+  if(mins>=1440) return (mins/1440)+'D';
+  if(mins>=60) return (mins/60)+'H';
+  return mins+'M';
+}
+
+// The fixed timeframe list this app supports, ascending (minutes).
+const TF_LIST_MIN = [1,3,5,15,30,60,120,240,1440];
+
+// Grey out + disable (pointer-events:none) any chip that would require
+// genuine candles finer than the imported data actually contains, so the
+// app never fabricates lower-timeframe candles that don't really exist.
+function applyTimeframeAvailability(){
+  const nativeMin = state.rawCandles.length ? Math.max(1, Math.round(state.nativeResSec/60)) : 1;
+  document.querySelectorAll('.tf-chip').forEach(el=>{
+    const mins = parseInt(el.dataset.tf,10);
+    const disabled = mins < nativeMin;
+    el.classList.toggle('disabled', disabled);
+    el.title = disabled
+      ? `Unavailable: your data's native resolution is ~${nativeMin}min, finer than ${formatTfLabel(mins)}`
+      : '';
+  });
+}
+
+// Given a preferred timeframe (minutes), returns the smallest available
+// timeframe that is NOT finer than the imported data's native resolution.
+function pickValidTimeframe(preferredMin){
+  const nativeMin = state.rawCandles.length ? Math.max(1, Math.round(state.nativeResSec/60)) : 1;
+  const valid = TF_LIST_MIN.filter(m=>m>=nativeMin);
+  if(valid.includes(preferredMin)) return preferredMin;
+  return valid.length ? Math.min(...valid) : 1440;
+}
+
+function fmtImportDate(t){
+  const d=new Date(t*1000); const p=n=>String(n).padStart(2,'0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+}
+
+function loadRealData(csvText){
+  const parsed = parseCandleCSV(csvText);
+  const summaryEl = document.getElementById('importSummary');
+  if(parsed.length < 20){
+    toast('Need at least 20 valid rows of real OHLC data');
+    if(summaryEl) summaryEl.textContent = 'Import failed - no valid OHLC rows recognized in that file.';
+    return;
+  }
+  state.rawCandles = parsed;
+  state.nativeResSec = detectNativeResSec(parsed);
+  const nativeMin = Math.round(state.nativeResSec/60);
+  applyTimeframeAvailability();
+  const first = fmtImportDate(parsed[0].t), last = fmtImportDate(parsed[parsed.length-1].t);
+  let summary;
+  if(nativeMin > 1){
+    summary = `${state.pair} loaded - ${parsed.length.toLocaleString()} candles - ${first} to ${last} (UTC) - native res ~${nativeMin}min - timeframes finer than that are disabled`;
+  } else {
+    summary = `${state.pair} M1 loaded successfully - ${parsed.length.toLocaleString()} candles - ${first} to ${last} (UTC) - all 9 timeframes available`;
+  }
+  if(summaryEl) summaryEl.textContent = summary;
+  toast(summary, 4200);
+  randomStart();
+}
+
+// Pick a random point inside the dataset to start replay from, so you can't
+// memorize what comes next. Leaves margin at both ends for context/runway.
+function randomStart(){
+  const raw = state.rawCandles;
+  if(raw.length < 100){ toast('Import more data first'); return; }
+  const margin = Math.min(300, Math.floor(raw.length*0.15));
+  const lo = margin, hi = raw.length - margin;
+  const idx = lo + Math.floor(Math.random()*(hi-lo));
+  // align to a clean hour boundary
+  const t = Math.floor(raw[idx].t/3600)*3600;
+  state.cursorTime = t;
+  state.drawings = [];
+  state.trade = null;
+  applyTimeframeAvailability();
+  setTimeframe(pickValidTimeframe(60)); // SMC workflow starts at 1H bias, if available
+  renderTradeForm();
+  toast(`New random replay session started (${formatTfLabel(state.timeframe)})`);
+}
+
+/* =========================================================================
+   CHART RENDERING ENGINE (canvas)
+   Layout is computed fresh each render so pan/zoom/resize stay in sync.
+   Price axis auto-fits the visible candles + any open trade lines +
+   any drawings that fall within the visible time range.
+   ========================================================================= */
+const canvas = document.getElementById('chartCanvas');
+const ctx = canvas.getContext('2d');
+const chartArea = document.getElementById('chartArea');
+let layout = null; // computed each render: {plotLeft,plotRight,plotTop,plotBottom,priceMin,priceMax,slotW}
+
+let canvasCssW = 0, canvasCssH = 0, canvasDpr = 0;
+function resizeCanvas(){
+  const dpr = window.devicePixelRatio||1;
+  const r = chartArea.getBoundingClientRect();
+  const w = Math.max(1, r.width);
+  const h = Math.max(1, r.height);
+  canvasCssW = w; canvasCssH = h; canvasDpr = dpr;
+  canvas.width = Math.round(w*dpr);
+  canvas.height = Math.round(h*dpr);
+  canvas.style.width = w+'px';
+  canvas.style.height = h+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function syncChartSurface(){
+  const r = chartArea.getBoundingClientRect();
+  const dpr = window.devicePixelRatio||1;
+  if(Math.abs(r.width-canvasCssW)>0.5 || Math.abs(r.height-canvasCssH)>0.5 || dpr!==canvasDpr){
+    resizeCanvas();
+    return true;
+  }
+  return false;
+}
+function handleViewportChange(){
+  resizeCanvas();
+  renderChart();
+  requestAnimationFrame(()=>{ resizeCanvas(); renderChart(); });
+}
+window.addEventListener('resize', handleViewportChange);
+window.addEventListener('orientationchange', handleViewportChange);
+if(window.visualViewport){ window.visualViewport.addEventListener('resize', handleViewportChange); }
+// IMPORTANT: the trade/drawer panels can change the chart's actual size without
+// firing a window resize. For example, pressing Open Trade changes the Trade
+// form from its setup state to its OPEN state. If the canvas backing buffer is
+// not resized at that exact moment, Android stretches the canvas and all
+// touch-to-chart coordinates appear to jump. Keep the drawing surface synced
+// to its real CSS size whenever the layout changes.
+if(window.ResizeObserver){
+  const chartResizeObserver = new ResizeObserver(()=>{
+    if(syncChartSurface()) renderChart();
+  });
+  chartResizeObserver.observe(chartArea);
+}
+
+function fmtTimeLabel(t, tfMin){
+  const d = new Date(t*1000);
+  const pad = n=>String(n).padStart(2,'0');
+  if(tfMin>=60*24){ return `${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+  return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function renderChart(){
+  const r = chartArea.getBoundingClientRect();
+  const W=r.width, H=r.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg') || '#131722';
+  ctx.fillRect(0,0,W,H);
+
+  const data = state.resampled;
+  if(!data.length){
+    ctx.fillStyle = '#787b86'; ctx.font='13px -apple-system,Arial'; ctx.textAlign='center';
+    ctx.fillText('Import real OHLC data in Settings to begin', W/2, H/2);
+    ctx.textAlign='left';
+    layout = null;
+    return;
+  }
+
+  // Clamp the horizontal viewport without rounding it. Keeping fractional
+  // start/count values is important for smooth pinch zoom and smooth panning.
+  // The old version rounded these values on every render, which made the chart
+  // jump from one candle position to another while zooming.
+  state.view.count = Math.max(15, Math.min(data.length, Number(state.view.count)||80));
+  const maxStart = maxViewportStart();
+  state.view.startIdx = Math.max(0, Math.min(maxStart, Number(state.view.startIdx)||0));
+  const startIdx = state.view.startIdx;
+  const endIdx = Math.min(data.length, Math.ceil(startIdx + state.view.count) + 1);
+  const sliceStart = Math.max(0, Math.floor(startIdx));
+  const visible = data.slice(sliceStart, endIdx);
+
+  const rightAxisW = 60, bottomAxisH = 22, topPad = 10;
+  const plotLeft = 6, plotRight = W-rightAxisW, plotTop = topPad, plotBottom = H-bottomAxisH;
+  const plotW = plotRight-plotLeft, plotH = plotBottom-plotTop;
+
+  // price range: visible candles + trade lines + drawings in visible time span
+  let pMin=Infinity, pMax=-Infinity;
+  for(const c of visible){ if(isFinite(c.l)&&isFinite(c.h)&&c.l>0&&c.h>=c.l){ if(c.l<pMin)pMin=c.l; if(c.h>pMax)pMax=c.h; } }
+  const t0 = visible[0].t, t1 = visible[visible.length-1].t + state.timeframe*60;
+  const consider = p=>{ if(!isFinite(p) || p<=0) return; if(p<pMin)pMin=p; if(p>pMax)pMax=p; };
+  // IMPORTANT: trade Entry/SL/TP lines must NOT participate in automatic
+  // price-scale fitting. TradingView-style trade levels are overlays: placing
+  // an entry far from the current candles must not suddenly squash/reposition
+  // the whole chart. This was the main reason the chart appeared to scatter
+  // immediately after placing Entry.
+  for(const d of state.drawings){
+    for(const pt of d.points){ if(pt.t>=t0-86400 && pt.t<=t1+86400) consider(pt.p); }
+  }
+  if(!isFinite(pMin)||!isFinite(pMax)){ pMin=0; pMax=1; }
+  const range = (pMax-pMin)||1; const pad = range*0.1;
+  const autoMin = pMin-pad, autoMax = pMax+pad;
+  const autoSpan = Math.max(1e-9, autoMax-autoMin);
+
+  // Vertical price-scale zoom. At zoom=1 the chart auto-fits exactly as before.
+  // Once the user drags the right price scale, keep that vertical scale stable
+  // while horizontal zoom/pan and timeframe changes happen independently.
+  let shownSpan = autoSpan;
+  let shownCenter = (autoMin+autoMax)/2;
+  // A manual price-scale span is authoritative in both directions.
+  // Do not clamp it to zoom>=1: that old clamp caused the scale to snap back
+  // to auto-fit as soon as the user dragged through the 1x boundary.
+  if(Number.isFinite(state.priceScale.span) && state.priceScale.span>0){
+    shownSpan = Math.max(autoSpan*0.005, state.priceScale.span);
+    shownCenter = Number.isFinite(state.priceScale.center) ? state.priceScale.center : shownCenter;
+  }
+  pMin = shownCenter - shownSpan/2;
+  pMax = shownCenter + shownSpan/2;
+
+  const priceToY = p => plotTop + (pMax-p)/(pMax-pMin)*plotH;
+  // X projection uses the fractional viewport directly. This lets the
+  // canvas zoom continuously around a focal point instead of snapping.
+  const idxToX = i => plotLeft + (i-startIdx+0.5)*(plotW/state.view.count);
+  const slotW = plotW/state.view.count;
+
+  layout = { plotLeft,plotRight,plotTop,plotBottom,plotW,plotH,pMin,pMax,priceToY,idxToX,slotW,startIdx,endIdx,data,autoMin,autoMax,autoSpan };
+
+  // grid + price labels
+  ctx.strokeStyle='#1e222d'; ctx.fillStyle='#787b86'; ctx.font='10px -apple-system,Arial'; ctx.textBaseline='middle';
+  const levels=6;
+  for(let i=0;i<=levels;i++){
+    const price = pMin + (pMax-pMin)*(i/levels);
+    const y = priceToY(price);
+    ctx.beginPath(); ctx.moveTo(plotLeft,y); ctx.lineTo(plotRight,y); ctx.stroke();
+    ctx.fillText(price.toFixed(5), plotRight+4, y);
+  }
+
+  // candles
+  const bodyW = Math.max(2, slotW*0.62);
+  visible.forEach((c,i)=>{
+    const gi = startIdx+i;
+    const x = idxToX(gi);
+    const up = c.c>=c.o;
+    ctx.strokeStyle = ctx.fillStyle = up ? '#089981' : '#f23645';
+    ctx.beginPath(); ctx.moveTo(x, priceToY(c.h)); ctx.lineTo(x, priceToY(c.l)); ctx.lineWidth=1; ctx.stroke();
+    const yo=priceToY(c.o), yc=priceToY(c.c);
+    const top=Math.min(yo,yc), h=Math.max(1,Math.abs(yc-yo));
+    ctx.fillRect(x-bodyW/2, top, bodyW, h);
+  });
+
+  // time axis labels (sparse)
+  ctx.fillStyle='#787b86'; ctx.textAlign='center'; ctx.textBaseline='top';
+  const labelCount = Math.min(5, visible.length);
+  for(let k=0;k<labelCount;k++){
+    const i = Math.floor(k*(visible.length-1)/Math.max(1,labelCount-1));
+    const gi = startIdx+i;
+    ctx.fillText(fmtTimeLabel(visible[i].t, state.timeframe), idxToX(gi), plotBottom+4);
+  }
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+
+  drawAllDrawings();
+  // Show editable handles for the selected drawing.
+  if(state.selectedDrawingId!=null){
+    const sd=state.drawings.find(d=>d.id===state.selectedDrawingId);
+    if(sd && sd.done){
+      const pts=drawingScreenPoints(sd);
+      ctx.save(); ctx.fillStyle='#ffffff'; ctx.strokeStyle=TOOL_COLOR[sd.type]||'#2962ff'; ctx.lineWidth=2;
+      pts.forEach((q,i)=>{
+        if(q.x==null) return;
+        if(BOX_TYPES.includes(sd.type)){
+          ctx.beginPath(); ctx.rect(q.x-6,q.y-6,12,12); ctx.fill(); ctx.stroke();
+        }else{
+          ctx.beginPath(); ctx.arc(q.x,q.y,6,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        }
+      });
+      ctx.restore();
+    }
+  }
+  drawTradeLines();
+  drawModeCrosshair();
+  drawTradingViewCrosshair();
+}
+
+/* ---- trade lines (Entry/SL/TP) ---- */
+function drawTradeLines(){
+  if(!state.trade || !layout) return;
+  const { priceToY, plotLeft, plotRight } = layout;
+  const draw=(price,color,label,key)=>{
+    if(price==null || !Number.isFinite(price)) return;
+    const y=priceToY(price);
+    // Keep the overlay clipped to the chart area.
+    if(y < layout.plotTop-20 || y > layout.plotBottom+20) return;
+    const selected = tradeDrag && tradeDrag.key===key;
+    ctx.save();
+    ctx.strokeStyle=color; ctx.setLineDash([6,4]); ctx.lineWidth=selected?2.5:1.5;
+    ctx.beginPath(); ctx.moveTo(plotLeft,y); ctx.lineTo(plotRight,y); ctx.stroke();
+    ctx.setLineDash([]);
+    // A draggable handle makes it obvious that Entry/SL/TP can be adjusted.
+    ctx.fillStyle=color;
+    ctx.beginPath(); ctx.arc(plotRight-10,y,selected?7:5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=color; ctx.fillRect(plotRight, y-9, 60, 18);
+    ctx.fillStyle='#0d1117'; ctx.font='bold 10px -apple-system,Arial'; ctx.textBaseline='middle';
+    ctx.fillText(label+' '+price.toFixed(5), plotRight+3, y);
+    ctx.restore();
+  };
+  draw(state.trade.sl, '#f23645','SL','sl');
+  draw(state.trade.tp, '#089981','TP','tp');
+  draw(state.trade.entry, '#2962ff','EN','entry');
+}
+
+// Trade levels are overlays, but unlike the old implementation they are
+// interactive. Touching a level starts a dedicated vertical drag, so the
+// gesture cannot accidentally turn into chart panning or drawing.
+let tradeDrag=null;
+function hitTestTradeLine(x,y){
+  if(!state.trade || !layout) return null;
+  const candidates=[
+    ['entry',state.trade.entry],
+    ['sl',state.trade.sl],
+    ['tp',state.trade.tp]
+  ];
+  let best=null, bestDist=16;
+  for(const [key,price] of candidates){
+    if(price==null || !Number.isFinite(price)) continue;
+    const py=layout.priceToY(price);
+    if(py < layout.plotTop-12 || py > layout.plotBottom+12) continue;
+    const d=Math.abs(y-py);
+    if(d<bestDist){ best={key,price,y:py}; bestDist=d; }
+  }
+  return best;
+}
+function beginTradeDrag(x,y){
+  const hit=hitTestTradeLine(x,y);
+  if(!hit) return false;
+  tradeDrag={key:hit.key,startY:y,startPrice:hit.price};
+  state.selectedDrawingId=null;
+  renderChart();
+  toast(`Drag ${hit.key.toUpperCase()} up/down to adjust it`);
+  return true;
+}
+function updateTradeDrag(x,y){
+  if(!tradeDrag || !layout || !state.trade) return;
+  const price=invertY(y);
+  if(!Number.isFinite(price)) return;
+  state.trade[tradeDrag.key]=price;
+  // Keep the canvas gesture lightweight and continuous. Rebuild the form only
+  // once the finger is released; rebuilding it on every move caused touch
+  // interactions to become unstable on mobile.
+  renderChart();
+}
+function endTradeDrag(){ tradeDrag=null; renderTradeForm(); renderChart(); }
+
+/* ---- crosshair / pending-anchor preview while placing a drawing ---- */
+function drawModeCrosshair(){
+  if(!layout) return;
+  if(state.pendingAnchor){
+    const x = timeToX(state.pendingAnchor.t), y = layout.priceToY(state.pendingAnchor.p);
+    if(x==null) return;
+    ctx.save();
+    ctx.strokeStyle='#2962ff'; ctx.fillStyle='#2962ff';
+    ctx.beginPath(); ctx.arc(x,y,5,0,7); ctx.fill();
+    ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(layout.plotLeft,y); ctx.lineTo(layout.plotRight,y); ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawTradingViewCrosshair(){
+  if(!layout || !state.crosshair.enabled || state.crosshair.x==null || state.crosshair.y==null) return;
+  const x=Math.max(layout.plotLeft, Math.min(layout.plotRight, state.crosshair.x));
+  const y=Math.max(layout.plotTop, Math.min(layout.plotBottom, state.crosshair.y));
+  ctx.save();
+  ctx.strokeStyle='#787b86'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(x,layout.plotTop); ctx.lineTo(x,layout.plotBottom); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(layout.plotLeft,y); ctx.lineTo(layout.plotRight,y); ctx.stroke(); ctx.setLineDash([]);
+  const price=layout.pMax-(y-layout.plotTop)/layout.plotH*(layout.pMax-layout.pMin);
+  const priceText=price.toFixed(5); ctx.font='10px -apple-system,Arial';
+  ctx.fillStyle='#2a2e39'; const pw=ctx.measureText(priceText).width+10; ctx.fillRect(layout.plotRight,y-9,pw,18);
+  ctx.fillStyle='#d1d4dc'; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(priceText,layout.plotRight+5,y);
+  const idx=Math.max(0,Math.min(layout.data.length-1,Math.round(state.view.startIdx+(x-layout.plotLeft)/layout.plotW*state.view.count-.5)));
+  const c=layout.data[idx];
+  if(c){
+    const time=fmtTimeLabel(c.t,state.timeframe); const tw=ctx.measureText(time).width+10;
+    ctx.fillStyle='#2a2e39'; ctx.fillRect(x-tw/2,layout.plotBottom,tw,18);
+    ctx.fillStyle='#d1d4dc'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(time,x,layout.plotBottom+9);
+    state.crosshair.candleIndex=idx;
+  }
+  ctx.restore();
+}
+function updateCrosshairInfo(){
+  const el=document.getElementById('crosshairInfo');
+  if(!el || !state.crosshair.enabled || !layout || state.crosshair.candleIndex==null){ if(el) el.style.display='none'; return; }
+  const c=layout.data[state.crosshair.candleIndex]; if(!c){el.style.display='none';return;}
+  el.style.display='block'; el.textContent=`O ${c.o.toFixed(5)}   H ${c.h.toFixed(5)}   L ${c.l.toFixed(5)}   C ${c.c.toFixed(5)}`;
+}
+function setCrosshairFromPoint(x,y){
+  if(!layout) return; state.crosshair.x=x; state.crosshair.y=y;
+  const idx=Math.max(0,Math.min(layout.data.length-1,Math.round(state.view.startIdx+(x-layout.plotLeft)/layout.plotW*state.view.count-.5)));
+  state.crosshair.candleIndex=idx; updateCrosshairInfo(); renderChart();
+}
+
+// Map a timestamp to pixel X using the ACTUAL candle timestamps in the
+// current resampled series (never assumed continuous intervals). This is
+// what keeps drawings correctly anchored across weekend/data gaps, zoom,
+// pan, timeframe switches and replay: we binary-search for the real candle
+// bucket whose start time is <= t, using the true (possibly irregular)
+// timestamps stored in layout.data - not "elapsed time / bar duration".
+function findCandleIndexForTime(dataArr, t){
+  if(!dataArr || !dataArr.length) return null;
+  if(t <= dataArr[0].t) return 0;
+  const last = dataArr.length-1;
+  if(t >= dataArr[last].t) return last;
+  let lo=0, hi=last;
+  while(lo<hi){
+    const mid = (lo+hi+1)>>1;
+    if(dataArr[mid].t<=t) lo=mid; else hi=mid-1;
+  }
+  return lo;
+}
+function timeToX(t){
+  if(!layout || !layout.data || !layout.data.length) return null;
+  const data=layout.data;
+  if(data.length===1) return layout.idxToX(0);
+  if(t<=data[0].t) return layout.idxToX(0);
+  const last=data.length-1;
+  if(t>=data[last].t) return layout.idxToX(last);
+  // Continuous interpolation between REAL candle timestamps. Do not snap
+  // drawings to the nearest candle: this is what makes a second tap land
+  // exactly where the user's finger placed it, even when candles are sparse
+  // or there are weekend/data gaps.
+  let lo=0, hi=last;
+  while(lo+1<hi){
+    const mid=(lo+hi)>>1;
+    if(data[mid].t<=t) lo=mid; else hi=mid;
+  }
+  const a=data[lo], b=data[hi];
+  const f=(b.t===a.t)?0:(t-a.t)/(b.t-a.t);
+  return layout.idxToX(lo+Math.max(0,Math.min(1,f)));
+}
+function priceToYSafe(p){ return layout ? layout.priceToY(p) : null; }
+
+/* =========================================================================
+   DRAWING TOOLS
+   Every drawing stores POINTS AS {t (unix sec), p (price)} - never pixels -
+   so it re-projects correctly on every render regardless of zoom/pan/replay.
+   ========================================================================= */
+let drawIdCounter = 1;
+function newDrawing(type){ return { id: drawIdCounter++, type, points: [], text:'', done:false }; }
+
+const TOOL_COLOR = { orderblock:'#ff9800', fvg:'#ab47bc', bos:'#2962ff', choch:'#ff6d00', liquidity:'#ffd600', hline:'#d1d4dc', trendline:'#26c6da', text:'#ffffff' };
+const TOOL_LABEL = { orderblock:'OB', fvg:'FVG', bos:'BOS', choch:'CHoCH', liquidity:'EQ' };
+const BOX_TYPES = ['orderblock','fvg'];
+const LINE2_TYPES = ['bos','choch','liquidity','trendline'];
+
+function drawAllDrawings(){
+  if(!layout) return;
+  for(const d of state.drawings){
+    if(!d.done) continue;
+    try{ renderDrawing(d); }catch(e){ /* skip malformed */ }
+  }
+}
+
+function renderDrawing(d){
+  const color = TOOL_COLOR[d.type] || '#fff';
+  if(d.type==='hline'){
+    const y = layout.priceToY(d.points[0].p);
+    ctx.save(); ctx.strokeStyle=color; ctx.setLineDash([4,4]); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(layout.plotLeft,y); ctx.lineTo(layout.plotRight,y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=color; ctx.font='10px -apple-system,Arial'; ctx.fillText(d.points[0].p.toFixed(5), layout.plotLeft+4, y-4);
+    ctx.restore();
+    return;
+  }
+  if(d.type==='text'){
+    const x = timeToX(d.points[0].t), y = layout.priceToY(d.points[0].p);
+    if(x==null) return;
+    ctx.save();
+    ctx.font='11px -apple-system,Arial'; const w=ctx.measureText(d.text).width;
+    ctx.fillStyle='rgba(20,23,31,0.85)'; ctx.fillRect(x-2,y-14,w+8,16);
+    ctx.fillStyle='#fff'; ctx.fillText(d.text||'', x+2, y-2);
+    ctx.restore();
+    return;
+  }
+  if(BOX_TYPES.includes(d.type)){
+    if(d.points.length<2) return;
+    const [a,b] = d.points;
+    const x1=timeToX(a.t), x2=timeToX(b.t), y1=layout.priceToY(a.p), y2=layout.priceToY(b.p);
+    if(x1==null||x2==null) return;
+    const left=Math.min(x1,x2), right=Math.max(x1,x2), top=Math.min(y1,y2), bottom=Math.max(y1,y2);
+    const w=Math.max(1,right-left), h=Math.max(1,bottom-top);
+    ctx.save();
+    // TradingView-style zone: translucent fill + crisp border.  The object
+    // remains anchored to its original candle time and price coordinates.
+    ctx.fillStyle = color+'2b';
+    ctx.strokeStyle=color;
+    ctx.lineWidth=1.2;
+    ctx.fillRect(left,top,w,h);
+    ctx.strokeRect(left+0.5,top+0.5,Math.max(0,w-1),Math.max(0,h-1));
+    // Small zone label that stays inside the rectangle when there is room.
+    ctx.fillStyle=color;
+    ctx.font='bold 10px -apple-system,Arial';
+    const label=TOOL_LABEL[d.type];
+    ctx.fillText(label, left+5, Math.min(bottom-4, top+12));
+    // Subtle center line makes the two-point zone easier to read on a phone.
+    if(h>=18){
+      ctx.globalAlpha=.45;
+      ctx.setLineDash([3,3]);
+      const midY=top+h/2;
+      ctx.beginPath(); ctx.moveTo(left,midY); ctx.lineTo(right,midY); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // Selected zones get a second outline so it is obvious which object will
+    // be edited/deleted; the existing endpoint handles remain the only hit areas.
+    if(state.selectedDrawingId===d.id){
+      ctx.globalAlpha=.9;
+      ctx.strokeStyle='#ffffff'; ctx.lineWidth=1;
+      ctx.setLineDash([4,3]);
+      ctx.strokeRect(left-2,top-2,w+4,h+4);
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+    return;
+  }
+  if(LINE2_TYPES.includes(d.type)){
+    if(d.points.length<2) return;
+    let [a,b] = d.points;
+    if(d.type==='liquidity'){ b = {t:b.t, p:a.p}; } // force horizontal (equal highs/lows)
+    const x1=timeToX(a.t), x2=timeToX(b.t), y1=layout.priceToY(a.p), y2=layout.priceToY(b.p);
+    if(x1==null||x2==null) return;
+    ctx.save();
+    ctx.strokeStyle=color; ctx.lineWidth=1.6;
+    if(d.type==='liquidity') ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    ctx.setLineDash([]);
+    // Trend lines get a small arrowhead at the second endpoint.
+    if(d.type==='trendline'){
+      const ang=Math.atan2(y2-y1,x2-x1), ah=8;
+      ctx.beginPath();
+      ctx.moveTo(x2,y2);
+      ctx.lineTo(x2-ah*Math.cos(ang-Math.PI/6), y2-ah*Math.sin(ang-Math.PI/6));
+      ctx.moveTo(x2,y2);
+      ctx.lineTo(x2-ah*Math.cos(ang+Math.PI/6), y2-ah*Math.sin(ang+Math.PI/6));
+      ctx.stroke();
+    }
+    if(TOOL_LABEL[d.type]){
+      ctx.fillStyle=color; ctx.font='bold 10px -apple-system,Arial';
+      const mx=(x1+x2)/2, my=(y1+y2)/2;
+      ctx.fillText(TOOL_LABEL[d.type], mx-ctx.measureText(TOOL_LABEL[d.type]).width/2, my-5);
+    }
+    ctx.restore();
+    return;
+  }
+}
+
+// Hit-test a tap (canvas px x,y) against existing drawings; returns closest
+// match within tolerance, or null. Used by the Delete tool.
+function hitTestDrawings(x,y){
+  if(!layout) return null;
+  const TOL = 14;
+  let best=null, bestDist=TOL;
+  for(const d of state.drawings){
+    if(!d.done) continue;
+    let dist = Infinity;
+    if(d.type==='hline'){
+      dist = Math.abs(y - layout.priceToY(d.points[0].p));
+    } else if(d.type==='text'){
+      const px=timeToX(d.points[0].t), py=layout.priceToY(d.points[0].p);
+      if(px!=null) dist = Math.hypot(x-px,y-py);
+    } else if(BOX_TYPES.includes(d.type) && d.points.length>=2){
+      const [a,b]=d.points;
+      const x1=timeToX(a.t),x2=timeToX(b.t),y1=layout.priceToY(a.p),y2=layout.priceToY(b.p);
+      if(x1!=null&&x2!=null){
+        const left=Math.min(x1,x2),right=Math.max(x1,x2),top=Math.min(y1,y2),bot=Math.max(y1,y2);
+        if(x>=left-TOL&&x<=right+TOL&&y>=top-TOL&&y<=bot+TOL) dist=0;
+      }
+    } else if(LINE2_TYPES.includes(d.type) && d.points.length>=2){
+      let [a,b]=d.points; if(d.type==='liquidity') b={t:b.t,p:a.p};
+      const x1=timeToX(a.t),x2=timeToX(b.t),y1=layout.priceToY(a.p),y2=layout.priceToY(b.p);
+      if(x1!=null&&x2!=null) dist = distToSegment(x,y,x1,y1,x2,y2);
+    }
+    if(dist<bestDist){ bestDist=dist; best=d; }
+  }
+  return best;
+}
+function distToSegment(px,py,x1,y1,x2,y2){
+  const dx=x2-x1, dy=y2-y1;
+  const len2 = dx*dx+dy*dy;
+  if(len2===0) return Math.hypot(px-x1,py-y1);
+  let t = ((px-x1)*dx+(py-y1)*dy)/len2;
+  t = Math.max(0,Math.min(1,t));
+  const cx=x1+t*dx, cy=y1+t*dy;
+  return Math.hypot(px-cx,py-cy);
+}
+
+// Convert a canvas pixel (x,y) into a chart {t,p} coordinate for placement.
+function pixelToCoord(x,y){
+  if(!layout || !layout.data || !layout.data.length) return null;
+  const data=layout.data;
+  // Convert screen X to a CONTINUOUS candle index instead of rounding to the
+  // nearest candle. The old rounding is why a two-tap drawing could appear at
+  // a different place (especially on 1D/4H charts or while zoomed out).
+  const rawIndex = layout.startIdx + ((x-layout.plotLeft)/layout.slotW - 0.5);
+  const idx = Math.max(0, Math.min(data.length-1, rawIndex));
+  const lo=Math.floor(idx), hi=Math.min(data.length-1,lo+1);
+  const f=idx-lo;
+  let t;
+  if(lo===hi) t=data[lo].t;
+  else t=data[lo].t + (data[hi].t-data[lo].t)*f;
+  const price = invertY(y);
+  return { t, p: price };
+}
+function invertY(y){
+  if(!layout) return 0;
+  const frac = (y-layout.plotTop)/layout.plotH;
+  return layout.pMax - frac*(layout.pMax-layout.pMin);
+}
+
+/* ========================================================================
+   DRAWING EDITING
+   Select/Edit lets the user drag whole drawings or individual endpoints.
+   Coordinates are always written back as exact time+price, never pixels.
+   ======================================================================== */
+function drawingScreenPoints(d){
+  if(!layout || !d || !d.points || !d.points.length) return [];
+  return d.points.map(pt=>({x:timeToX(pt.t), y:layout.priceToY(pt.p)}));
+}
+function pointDist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+function hitTestEdit(x,y){
+  if(!layout) return null;
+  const TOL=18;
+  let best=null, bestDist=TOL;
+  for(const d of state.drawings){
+    if(!d.done || !d.points?.length) continue;
+    const sp=drawingScreenPoints(d); if(sp.some(q=>q.x==null)) continue;
+    // Endpoint/corner handles have priority.
+    sp.forEach((q,i)=>{
+      const dist=pointDist({x,y},q);
+      if(dist<bestDist) best={d,index:i,kind:'point'};
+    });
+    if(best && best.d===d && best.kind==='point') continue;
+    if(d.type==='hline'){
+      const dist=Math.abs(y-sp[0].y);
+      if(dist<bestDist) best={d,index:0,kind:'line'};
+    } else if(d.type==='text'){
+      const dist=pointDist({x,y},sp[0]);
+      if(dist<bestDist) best={d,index:0,kind:'move'};
+    } else if(BOX_TYPES.includes(d.type) && sp.length>=2){
+      const left=Math.min(sp[0].x,sp[1].x), right=Math.max(sp[0].x,sp[1].x);
+      const top=Math.min(sp[0].y,sp[1].y), bot=Math.max(sp[0].y,sp[1].y);
+      if(x>=left&&x<=right&&y>=top&&y<=bot) best={d,index:-1,kind:'move'};
+    } else if(LINE2_TYPES.includes(d.type) && sp.length>=2){
+      const dist=distToSegment(x,y,sp[0].x,sp[0].y,sp[1].x,sp[1].y);
+      if(dist<bestDist) best={d,index:-1,kind:'move'};
+    }
+  }
+  return best;
+}
+let editDrag=null;
+function beginDrawingEdit(x,y){
+  const hit=hitTestEdit(x,y);
+  if(!hit) return false;
+  const d=hit.d;
+  state.selectedDrawingId=d.id;
+  const pts=d.points.map(p=>({t:p.t,p:p.p}));
+  editDrag={d, index:hit.index, kind:hit.kind, startX:x, startY:y, original:pts};
+  renderChart();
+  return true;
+}
+function updateDrawingEdit(x,y){
+  if(!editDrag || !layout) return;
+  const {d,index,kind,startX,startY,original}=editDrag;
+  if(kind==='point'){
+    const c=pixelToCoord(x,y);
+    if(!c) return;
+    d.points[index]={t:c.t,p:c.p};
+    if(d.type==='liquidity' && d.points.length>1) d.points[1].p=d.points[0].p;
+  }else if(kind==='line'){
+    const c=pixelToCoord(x,y); if(c) d.points[0].p=c.p;
+  }else if(kind==='move'){
+    const c0=pixelToCoord(startX,startY), c1=pixelToCoord(x,y);
+    if(!c0||!c1) return;
+    const dt=c1.t-c0.t, dp=c1.p-c0.p;
+    d.points=d.points.map((p,i)=>({t:original[i].t+dt,p:original[i].p+dp}));
+    if(d.type==='liquidity' && d.points.length>1) d.points[1].p=d.points[0].p;
+  }
+  renderChart();
+}
+function endDrawingEdit(){ editDrag=null; }
+
+/* =========================================================================
+   POINTER INPUT: one-finger pan, two-finger pinch-zoom, tap-to-place
+   ========================================================================= */
+const pointers = new Map();
+let dragStart = null;      // {x,y,startIdxAtDown,t}
+let pinchStartDist = null;
+let pinchStartCount = null;
+let pinchStartStart = null;
+let pinchAnchorIndex = null;
+let pinchAnchorFrac = null;
+let tapCandidate = null;   // {x,y,t}
+let priceDrag = null;      // vertical drag on the right-hand price scale
+
+// TradingView-style horizontal workspace: allow a little empty space to the
+// right of the newest candle so the latest candle is not glued to the axis.
+// The extra space is only available when the user deliberately pans there.
+function maxViewportStart(){
+  const n = state.resampled.length;
+  if(!n) return 0;
+  const count = Math.max(15, Math.min(n, Number(state.view.count)||80));
+  const rightWorkspace = Math.min(count * 0.28, 24);
+  return Math.max(0, n - count + rightWorkspace);
+}
+
+function clampViewport(){
+  const n = state.resampled.length;
+  if(!n) return;
+  state.view.count = Math.max(15, Math.min(n, Number(state.view.count)||80));
+  const maxStart = maxViewportStart();
+  state.view.startIdx = Math.max(0, Math.min(maxStart, Number(state.view.startIdx)||0));
+}
+
+canvas.addEventListener('pointerdown', e=>{
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, {x:e.clientX,y:e.clientY});
+  const rect = canvas.getBoundingClientRect();
+  const lx = e.clientX-rect.left, ly = e.clientY-rect.top;
+
+  if(state.crosshair.enabled && pointers.size===1){
+    tapCandidate=null; dragStart=null; priceDrag=null; setCrosshairFromPoint(lx,ly); return;
+  }
+
+  // The right price scale behaves like TradingView: drag it vertically to
+  // compress/expand candle height without changing horizontal position.
+  if(pointers.size===1 && layout && lx >= layout.plotRight && state.inputMode==='pan'){
+    const frac = Math.max(0, Math.min(1, (ly-layout.plotTop)/layout.plotH));
+    const anchorPrice = layout.pMax - frac*(layout.pMax-layout.pMin);
+    const startSpan = layout.pMax-layout.pMin;
+    priceDrag = { startY:ly, startSpan, anchorPrice, anchorFrac:frac };
+    tapCandidate=null; dragStart=null;
+    return;
+  }
+
+  if(pointers.size===1){
+    // Trade levels get first refusal in normal/Edit mode.
+    if((state.inputMode==='pan' || state.inputMode==='edit') && beginTradeDrag(lx,ly)){
+      dragStart=null; tapCandidate=null;
+      return;
+    }
+    if(state.inputMode==='edit' && beginDrawingEdit(lx,ly)){
+      dragStart=null; tapCandidate=null;
+      return;
+    }
+
+    // IMPORTANT: only PAN mode starts chart panning. Drawing, delete and
+    // placement modes are tap-only so the chart cannot move accidentally.
+    if(state.inputMode==='pan'){
+      dragStart = {
+        x:lx, y:ly,
+        startIdx: state.view.startIdx,
+        startPriceCenter: layout ? (layout.pMin + layout.pMax) / 2 : null,
+        startPriceSpan: layout ? (layout.pMax - layout.pMin) : null,
+        verticalPanStarted: false,
+        t: Date.now()
+      };
+    }else{
+      dragStart=null;
+    }
+    tapCandidate = { x:lx, y:ly, t: Date.now() };
+  } else if(pointers.size===2){
+    const pts = [...pointers.values()];
+    pinchStartDist = Math.max(1, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y));
+    pinchStartCount = state.view.count;
+    pinchStartStart = state.view.startIdx;
+    if(layout){
+      const midX = (pts[0].x+pts[1].x)/2 - rect.left;
+      pinchAnchorFrac = Math.max(0, Math.min(1, (midX-layout.plotLeft)/layout.plotW));
+      pinchAnchorIndex = pinchStartStart + pinchAnchorFrac*pinchStartCount - 0.5;
+    }
+    dragStart=null;
+    tapCandidate = null;
+  }
+});
+
+canvas.addEventListener('pointermove', e=>{
+  if(!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, {x:e.clientX,y:e.clientY});
+  const rect = canvas.getBoundingClientRect();
+  const lx = e.clientX-rect.left, ly = e.clientY-rect.top;
+
+  if(state.crosshair.enabled && pointers.size===1){ setCrosshairFromPoint(lx,ly); return; }
+
+  if(priceDrag && pointers.size===1 && layout){
+    const dy = ly-priceDrag.startY;
+    const sensitivity = 0.006;
+    const newSpan = Math.max(priceDrag.startSpan*0.005, priceDrag.startSpan*Math.exp(dy*sensitivity));
+    const center = priceDrag.anchorPrice - (0.5-priceDrag.anchorFrac)*newSpan;
+    state.priceScale.zoom = layout.autoSpan/newSpan;
+    state.priceScale.span = newSpan;
+    state.priceScale.center = center;
+    renderChart();
+    return;
+  }
+
+  if(tradeDrag && pointers.size===1){
+    updateTradeDrag(lx,ly);
+    return;
+  }
+
+  if(editDrag && pointers.size===1){
+    updateDrawingEdit(lx,ly);
+    return;
+  }
+
+  if(pointers.size===2 && pinchStartDist && layout){
+    const pts=[...pointers.values()];
+    const dist = Math.max(1, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y));
+    const ratio = dist/pinchStartDist;
+    const newCount = Math.max(15, Math.min(state.resampled.length||500, pinchStartCount/ratio));
+    state.view.count = newCount;
+    state.view.startIdx = pinchAnchorIndex - pinchAnchorFrac*newCount + 0.5;
+    clampViewport();
+    renderChart();
+    return;
+  }
+
+  // Preserve the original TradingView-like chart pan (horizontal + vertical),
+  // but ONLY while PAN mode is active.
+  if(pointers.size===1 && dragStart && layout && state.inputMode==='pan'){
+    const dx = lx - dragStart.x;
+    const dy = ly - dragStart.y;
+    if(Math.abs(dx) > 4 || Math.abs(dy) > 4) tapCandidate = null;
+
+    const candlesShifted = -dx/layout.slotW;
+    state.view.startIdx = dragStart.startIdx + candlesShifted;
+    clampViewport();
+
+    if(Math.abs(dy) > 4 && Number.isFinite(dragStart.startPriceSpan) && dragStart.startPriceSpan > 0){
+      dragStart.verticalPanStarted = true;
+      state.priceScale.span = dragStart.startPriceSpan;
+      state.priceScale.center = dragStart.startPriceCenter - (dy / layout.plotH) * dragStart.startPriceSpan;
+      state.priceScale.zoom = layout.autoSpan / dragStart.startPriceSpan;
+    }
+    renderChart();
+  }
+});
+
+function endPointer(e){
+  if(state.crosshair.enabled){ pointers.delete(e.pointerId); if(pointers.size===0){dragStart=null;tapCandidate=null;pinchStartDist=null;} return; }
+  if(priceDrag){ priceDrag=null; }
+  if(tradeDrag){ endTradeDrag(); }
+  if(editDrag){ endDrawingEdit(); }
+  pointers.delete(e.pointerId);
+  if(pointers.size===0){
+    if(tapCandidate && Date.now()-tapCandidate.t < 500){
+      handleChartTap(tapCandidate.x, tapCandidate.y);
+    }
+    dragStart=null; pinchStartDist=null; pinchStartCount=null;
+    pinchStartStart=null; pinchAnchorIndex=null; pinchAnchorFrac=null;
+    tapCandidate=null;
+  } else if(pointers.size===1){
+    // If one finger remains after a pinch, start a fresh pan baseline so the
+    // chart does not jump when that finger continues moving.
+    const pt=[...pointers.values()][0];
+    const rect=canvas.getBoundingClientRect();
+    if(state.inputMode==='pan'){
+      dragStart={
+        x:pt.x-rect.left, y:pt.y-rect.top,
+        startIdx:state.view.startIdx,
+        startPriceCenter: layout ? (layout.pMin + layout.pMax) / 2 : null,
+        startPriceSpan: layout ? (layout.pMax - layout.pMin) : null,
+        verticalPanStarted:false, t:Date.now()
+      };
+    }else{
+      dragStart=null;
+    }
+    tapCandidate=null;
+    pinchStartDist=null;
+  }
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+
+// Desktop/trackpad wheel zoom. On phones the pinch handler above is used.
+// The wheel also keeps the mouse position as the zoom focal point.
+canvas.addEventListener('wheel', e=>{
+  if(!layout || !state.resampled.length) return;
+  e.preventDefault();
+  const rect=canvas.getBoundingClientRect();
+  const x=e.clientX-rect.left;
+  const frac=Math.max(0,Math.min(1,(x-layout.plotLeft)/layout.plotW));
+  const anchor=state.view.startIdx + frac*state.view.count - 0.5;
+  const factor=Math.exp(e.deltaY*0.0015);
+  const newCount=Math.max(15,Math.min(state.resampled.length,state.view.count*factor));
+  state.view.count=newCount;
+  state.view.startIdx=anchor-frac*newCount+0.5;
+  clampViewport();
+  renderChart();
+},{passive:false});
+
+/* ---------- tap dispatch: placement mode vs plain pan ---------- */
+function handleChartTap(x,y){
+  if(!layout) return;
+  const mode = state.inputMode;
+
+  if(mode==='edit'){
+    const hit=hitTestEdit(x,y);
+    if(hit){ state.selectedDrawingId=hit.d.id; toast('Drag the drawing or its endpoint to adjust it'); renderChart(); }
+    return;
+  }
+  if(mode==='delete' || mode==='select'){
+    const hit = hitTestDrawings(x,y);
+    if(hit && confirm(`Delete this ${TOOL_LABEL[hit.type]||hit.type} drawing?`)){
+      state.drawings = state.drawings.filter(d=>d.id!==hit.id);
+      if(state.selectedDrawingId===hit.id) state.selectedDrawingId=null;
+      toast('Drawing deleted');
+      renderChart();
+    }
+    return;
+  }
+
+  if(mode.startsWith('draw:')){
+    const type = mode.slice(5);
+    const coord = pixelToCoord(x,y);
+    if(type==='hline'){
+      const d = newDrawing('hline'); d.points=[coord]; d.done=true;
+      state.drawings.push(d); exitPlacementMode(); renderChart(); return;
+    }
+    if(type==='text'){
+      const txt = prompt('Note text:'); if(txt===null){ exitPlacementMode(); return; }
+      const d = newDrawing('text'); d.points=[coord]; d.text=txt; d.done=true;
+      state.drawings.push(d); exitPlacementMode(); renderChart(); return;
+    }
+    // two-point tools
+    if(!state.pendingAnchor){
+      state.pendingAnchor = coord;
+      updateModeBanner(`Tap 2nd point for ${TOOL_LABEL[type]||type}`);
+      renderChart();
+    } else {
+      const d = newDrawing(type); d.points=[state.pendingAnchor, coord]; d.done=true;
+      state.drawings.push(d);
+      state.pendingAnchor=null;
+      exitPlacementMode(); renderChart();
+    }
+    return;
+  }
+
+  if(mode==='place:entry' || mode==='place:sl' || mode==='place:tp'){
+    const price = invertY(y);
+    if(!state.trade) state.trade = blankTrade();
+    if(mode==='place:entry') state.trade.entry = price;
+    if(mode==='place:sl') state.trade.sl = price;
+    if(mode==='place:tp') state.trade.tp = price;
+    exitPlacementMode();
+    renderTradeForm(); renderChart();
+    return;
+  }
+  // mode==='pan': plain taps do nothing
+}
+
+function updateModeBanner(text){
+  const b=document.getElementById('modeBanner'); const t=document.getElementById('modeBannerText');
+  if(text){ b.style.display='flex'; t.textContent=text; } else { b.style.display='none'; }
+}
+function exitPlacementMode(){
+  state.inputMode='pan'; state.pendingAnchor=null;
+  document.querySelectorAll('#toolStrip button').forEach(b=>b.classList.remove('active'));
+  updateModeBanner(null);
+}
+document.getElementById('modeCancelBtn').addEventListener('click', ()=>{ exitPlacementMode(); renderChart(); });
+
+/* =========================================================================
+   REPLAY ENGINE
+   cursorTime advances/retreats by the currently selected timeframe. SL/TP
+   hits are checked against the FINEST (raw) data in the time range crossed,
+   so results are accurate regardless of which timeframe is on screen.
+   ========================================================================= */
+function nextCandle(){
+  if(!state.rawCandles.length) return;
+  const durSec = state.timeframe*60;
+  const oldCursor = state.cursorTime;
+  const aligned = Math.floor(oldCursor/durSec)*durSec;
+  const newCursor = aligned + durSec;
+  const lastRaw = state.rawCandles[state.rawCandles.length-1].t;
+  if(newCursor > lastRaw + durSec){ toast('End of data'); return; }
+
+  if(state.trade && !state.trade.closed){
+    const hit = scanForHit(oldCursor, newCursor);
+    if(hit==='AMBIGUOUS'){
+      // both SL and TP fell within the same raw candle - ask the user
+      askAmbiguousResolution(newCursor);
+      return; // don't advance cursor until resolved
+    }
+    if(hit) closeTradeByHit(hit, newCursor);
+  }
+  state.cursorTime = newCursor;
+  rebuildResampled();
+  renderChart();
+}
+function prevCandle(){
+  if(!state.rawCandles.length){ toast('No data loaded'); return; }
+  const durSec = state.timeframe*60;
+  const aligned = Math.floor(state.cursorTime/durSec)*durSec;
+  const newCursor = aligned - durSec;
+  if(newCursor < state.rawCandles[0].t) { toast('Start of data'); return; }
+  state.cursorTime = newCursor;
+  rebuildResampled();
+  renderChart();
+  toast('Reviewing history - closed trades are not reopened', 1400);
+}
+
+// Scan raw candles in (fromT, toT] against the open trade's SL/TP.
+// Returns 'SL' | 'TP' | 'AMBIGUOUS' (both touched in the same raw bar) | null.
+function scanForHit(fromT, toT){
+  const tr = state.trade;
+  const raw = state.rawCandles;
+  const startI = upperBoundTime(raw, fromT);
+  const endI = upperBoundTime(raw, toT);
+  for(let i=startI;i<endI;i++){
+    const c = raw[i];
+    if(!tr.entryTriggered){
+      const entryTouched = c.l <= tr.entry && c.h >= tr.entry;
+      if(!entryTouched) continue;
+      tr.entryTriggered = true;
+      tr.entryHitTime = c.t;
+      toast(`ENTRY filled at ${tr.entry.toFixed(5)} — SL/TP now active`, 1800);
+      // OHLC cannot prove the intrabar order of Entry vs SL/TP, so SL/TP
+      // checks begin on the next raw candle after the entry is filled.
+      continue;
+    }
+    const hitSL = tr.direction==='buy' ? c.l<=tr.sl : c.h>=tr.sl;
+    const hitTP = tr.direction==='buy' ? c.h>=tr.tp : c.l<=tr.tp;
+    if(hitSL && hitTP) return 'AMBIGUOUS';
+    if(hitSL) return 'SL';
+    if(hitTP) return 'TP';
+  }
+  return null;
+}
+function askAmbiguousResolution(pendingNewCursor){
+  const goSL = confirm('Both SL and TP were touched inside the same candle - OHLC data can\'t tell which came first.\n\nOK = SL hit first\nCancel = TP hit first');
+  closeTradeByHit(goSL?'SL':'TP', pendingNewCursor);
+  state.cursorTime = pendingNewCursor;
+  rebuildResampled();
+  renderChart();
+}
+
+/* =========================================================================
+   TRADE MODULE
+   ========================================================================= */
+function blankTrade(){
+  return { direction:'buy', setup:'Order Block', entry:null, sl:null, tp:null,
+           riskPercent: state.account.riskPercent, lot:0, rr:0, riskAmt:0,
+           closed:false, notes:'', beMoved:false, openTime:null, timeframe:state.timeframe };
+}
+
+function tradeCalc(tr){
+  const out = { pipDist:null, lot:0, rr:0, riskAmt:0 };
+  if(tr.entry==null || tr.sl==null) return out;
+  const pip = pairPipSize();
+  const slDist = Math.abs(tr.entry - tr.sl);
+  out.pipDist = slDist/pip;
+  out.riskAmt = state.account.balance * (tr.riskPercent/100);
+  out.lot = slDist>0 ? out.riskAmt/(slDist*state.account.contractSize) : 0;
+  if(tr.tp!=null){ const tpDist=Math.abs(tr.tp-tr.entry); out.rr = slDist>0 ? tpDist/slDist : 0; }
+  return out;
+}
+
+function openTrade(){
+  const tr = state.trade;
+  if(!tr || tr.entry==null || tr.sl==null || tr.tp==null){ toast('Set Entry, SL and TP first'); return; }
+  const wrongSide = tr.direction==='buy' ? (tr.sl>=tr.entry || tr.tp<=tr.entry) : (tr.sl<=tr.entry || tr.tp>=tr.entry);
+  if(wrongSide && !confirm(`For a ${tr.direction.toUpperCase()}, SL/TP look like they're on the wrong side of Entry. Open anyway?`)) return;
+  const calc = tradeCalc(tr);
+  tr.lot = calc.lot; tr.rr = calc.rr; tr.riskAmt = calc.riskAmt;
+  tr.closed = false; tr.openTime = state.cursorTime; tr.timeframe = state.timeframe;
+  tr.beMoved = false;
+  tr.entryTriggered = false;
+  tr.entryHitTime = null;
+  toast(`Entry armed: waiting for price to tap ${tr.entry.toFixed(5)}`);
+  renderTradeForm();
+  requestAnimationFrame(()=>{ resizeCanvas(); renderChart(); });
+}
+
+function moveToBreakeven(){
+  if(!state.trade || state.trade.closed){ toast('No open trade'); return; }
+  state.trade.sl = state.trade.entry;
+  state.trade.beMoved = true;
+  toast('SL moved to breakeven');
+  renderTradeForm(); renderChart();
+}
+
+function closeTradeManually(){
+  const tr = state.trade;
+  if(!tr || tr.closed){ toast('No open trade'); return; }
+  if(!tr.entryTriggered){
+    state.trade = null;
+    autosave();
+    toast('Pending entry cancelled — no trade recorded', 2200);
+    renderTradeForm(); renderChart();
+    return;
+  }
+  const last = state.resampled[state.resampled.length-1];
+  if(!last){ toast('No price to exit at'); return; }
+  finalizeTrade(tr, last.c, 'MANUAL');
+}
+
+function closeTradeByHit(hitType, atTime){
+  const tr = state.trade;
+  // HARD SAFETY: an unfilled/pending order can NEVER become a journal trade.
+  // Price reaching TP/SL while Entry was never touched must be ignored.
+  if(!tr || tr.closed || tr.entryTriggered !== true){
+    if(tr && tr.entryTriggered !== true){
+      toast('Entry was not filled — no trade recorded', 1800);
+    }
+    return;
+  }
+  if(hitType!=='SL' && hitType!=='TP') return;
+  const exitPrice = hitType==='SL' ? tr.sl : tr.tp;
+  if(exitPrice==null) return;
+  finalizeTrade(tr, exitPrice, hitType);
+}
+
+function finalizeTrade(tr, exitPrice, hitType){
+  // Never write a journal record for a pending/unfilled entry.
+  if(!tr || tr.entryTriggered !== true){
+    toast('Entry was not filled — trade not recorded', 1800);
+    return;
+  }
+  const dirSign = tr.direction==='buy' ? 1 : -1;
+  const dollarPL = (exitPrice - tr.entry) * tr.lot * state.account.contractSize * dirSign;
+  const pips = (exitPrice - tr.entry)/pairPipSize() * dirSign;
+  const rGained = tr.riskAmt>0 ? dollarPL/tr.riskAmt : 0;
+
+  let result;
+  if(hitType==='SL'){ result = tr.beMoved ? 'BE' : 'LOSS'; }
+  else if(hitType==='TP'){ result = 'WIN'; }
+  else { // manual close
+    result = Math.abs(rGained) < 0.05 ? 'BE' : (dollarPL>0 ? 'WIN' : 'LOSS');
+  }
+
+  state.tradeCounter++;
+  state.journal.push({
+    num: state.tradeCounter,
+    time: tr.openTime,
+    pair: state.pair,
+    timeframe: tr.timeframe+'M',
+    direction: tr.direction,
+    setup: tr.setup,
+    entry: tr.entry, sl: tr.sl, tp: tr.tp,
+    riskPercent: tr.riskPercent, lot: tr.lot, rr: tr.rr,
+    result, pips, dollarPL, rGained,
+    notes: tr.notes||''
+  });
+  tr.closed = true;
+  autosave();
+  toast(`Trade closed: ${result} (${rGained>=0?'+':''}${rGained.toFixed(2)}R, $${dollarPL.toFixed(2)})`, 2600);
+  state.trade = null;
+  renderTradeForm(); renderJournal(); renderStats(); renderChart();
+}
+
+/* ---------- Trade tab form ---------- */
+function renderTradeForm(){
+  const wrap = document.getElementById('tradeFormWrap');
+  // Do NOT infer that an order was filled from openTime. Older sessions may
+  // not contain entryTriggered; those orders must remain pending until a real
+  // candle touches Entry.
+  if(state.trade && state.trade.closed===false && state.trade.entryTriggered==null){
+    state.trade.entryTriggered = false;
+    autosave();
+  }
+  const tr = state.trade || blankTrade();
+  const calc = tradeCalc(tr);
+  const isOpen = tr.closed===false && tr.openTime!=null;
+  const isPending = isOpen && !tr.entryTriggered;
+
+  wrap.innerHTML = `
+    <div class="card">
+      <div class="row2">
+        <div>
+          <label>Direction</label>
+          <select id="trDirection">
+            <option value="buy" ${tr.direction==='buy'?'selected':''}>Buy</option>
+            <option value="sell" ${tr.direction==='sell'?'selected':''}>Sell</option>
+          </select>
+        </div>
+        <div>
+          <label>Setup Type</label>
+          <select id="trSetup">
+            ${['Order Block','FVG','Liquidity Sweep','BOS Retest','CHoCH Retest','Equal Highs/Lows','Other']
+              .map(s=>`<option ${tr.setup===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <label>Risk %</label>
+      <input type="number" id="trRisk" value="${tr.riskPercent}" step="0.1" min="0.1">
+
+      <div class="row3" style="margin-top:8px;">
+        <button class="fbtn small" id="btnPlaceEntry" style="width:100%;">Set Entry</button>
+        <button class="fbtn small" id="btnPlaceSL" style="width:100%;">Set SL</button>
+        <button class="fbtn small" id="btnPlaceTP" style="width:100%;">Set TP</button>
+      </div>
+
+      <table style="margin-top:8px;">
+        <tr><td>Entry</td><td>${tr.entry!=null?tr.entry.toFixed(5):'-'}</td>
+            <td>SL</td><td>${tr.sl!=null?tr.sl.toFixed(5):'-'}</td>
+            <td>TP</td><td>${tr.tp!=null?tr.tp.toFixed(5):'-'}</td></tr>
+      </table>
+      <div class="row3" style="margin-top:6px;">
+        <div class="statbox"><div class="v">${calc.pipDist?calc.pipDist.toFixed(1):'-'}</div><div class="l">SL Pips</div></div>
+        <div class="statbox"><div class="v">${calc.rr?calc.rr.toFixed(2):'-'}</div><div class="l">R:R</div></div>
+        <div class="statbox"><div class="v">${calc.lot?calc.lot.toFixed(2):'-'}</div><div class="l">Lot Size</div></div>
+      </div>
+
+      <label>Notes</label>
+      <textarea id="trNotes" rows="2" style="width:100%;">${tr.notes||''}</textarea>
+
+      ${isOpen ? `
+        <div class="row2" style="margin-top:8px;">
+          ${isPending ? '' : `<button class="bigbtn" id="btnBE" style="background:var(--warn); color:#000;">Move SL to BE</button>`}
+          <button class="bigbtn" id="btnCloseManual" style="background:var(--down); color:#fff;">${isPending ? 'Cancel Pending Entry' : 'Close Trade'}</button>
+        </div>
+        <p style="font-size:11px; color:var(--text-dim); margin-top:6px;">${isPending ? 'ENTRY PENDING · Next Candle waits for an actual Entry tap' : `Trade OPEN · ${tr.beMoved?'BE armed':'stepping Next Candle will auto-check SL/TP'}`}</p>
+      ` : `
+        <button class="bigbtn" id="btnOpenTrade" style="background:var(--up); color:#fff; margin-top:8px;">Open Trade</button>
+      `}
+    </div>
+  `;
+
+  document.getElementById('trDirection').onchange = e=>{ state.trade=state.trade||blankTrade(); state.trade.direction=e.target.value; renderTradeForm(); };
+  document.getElementById('trSetup').onchange = e=>{ state.trade=state.trade||blankTrade(); state.trade.setup=e.target.value; };
+  document.getElementById('trRisk').oninput = e=>{ state.trade=state.trade||blankTrade(); state.trade.riskPercent=parseFloat(e.target.value)||0; renderTradeForm(); };
+  document.getElementById('trNotes').oninput = e=>{ state.trade=state.trade||blankTrade(); state.trade.notes=e.target.value; };
+  document.getElementById('btnPlaceEntry').onclick = ()=> armPlacement('place:entry','Tap chart to set ENTRY price');
+  document.getElementById('btnPlaceSL').onclick = ()=> armPlacement('place:sl','Tap chart to set SL price');
+  document.getElementById('btnPlaceTP').onclick = ()=> armPlacement('place:tp','Tap chart to set TP price');
+  if(isOpen){
+    const beBtn = document.getElementById('btnBE');
+    if(beBtn) beBtn.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); moveToBreakeven(); };
+    const closeBtn = document.getElementById('btnCloseManual');
+    if(closeBtn){
+      closeBtn.type='button';
+      closeBtn.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); closeTradeManually(); };
+    }
+  } else {
+    document.getElementById('btnOpenTrade').onclick = openTrade;
+  }
+}
+
+function armPlacement(mode,bannerText){
+  state.inputMode = mode;
+  updateModeBanner(bannerText);
+}
+
+/* =========================================================================
+   JOURNAL
+   ========================================================================= */
+function fmtDT(t){
+  const d=new Date(t*1000); const p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function renderJournal(){
+  const table = document.getElementById('journalTable');
+  const cols = ['#','Date/Time','Pair','TF','Dir','Setup','Entry','SL','TP','Risk%','Lot','R:R','Result','R','P/L $','Notes'];
+  let html = '<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
+  for(const j of [...state.journal].reverse()){
+    const rc = j.result==='WIN'?'pos':(j.result==='LOSS'?'neg':'');
+    html += `<tr>
+      <td>${j.num}</td><td>${fmtDT(j.time)}</td><td>${j.pair}</td><td>${j.timeframe}</td>
+      <td>${j.direction.toUpperCase()}</td><td>${j.setup}</td>
+      <td>${j.entry.toFixed(5)}</td><td>${j.sl.toFixed(5)}</td><td>${j.tp.toFixed(5)}</td>
+      <td>${j.riskPercent}%</td><td>${j.lot.toFixed(2)}</td><td>${j.rr.toFixed(2)}</td>
+      <td class="${rc}">${j.result}</td>
+      <td class="${rc}">${j.rGained>=0?'+':''}${j.rGained.toFixed(2)}</td>
+      <td class="${rc}">${j.dollarPL>=0?'+':''}$${j.dollarPL.toFixed(2)}</td>
+      <td>${j.notes||''}</td>
+    </tr>`;
+  }
+  table.innerHTML = html;
+}
+
+/* =========================================================================
+   STATS + EQUITY CURVE
+   ========================================================================= */
+function computeStats(){
+  const J = state.journal;
+  const total = J.length;
+  const wins = J.filter(j=>j.result==='WIN').length;
+  const losses = J.filter(j=>j.result==='LOSS').length;
+  const bes = J.filter(j=>j.result==='BE').length;
+  const winrate = (wins+losses)>0 ? wins/(wins+losses)*100 : 0;
+  const grossProfit = J.filter(j=>j.dollarPL>0).reduce((s,j)=>s+j.dollarPL,0);
+  const grossLoss = J.filter(j=>j.dollarPL<0).reduce((s,j)=>s+Math.abs(j.dollarPL),0);
+  const profitFactor = grossLoss>0 ? grossProfit/grossLoss : (grossProfit>0?Infinity:0);
+  const netPL = J.reduce((s,j)=>s+j.dollarPL,0);
+  const avgR = total>0 ? J.reduce((s,j)=>s+j.rGained,0)/total : 0;
+  const expectancyDollar = total>0 ? netPL/total : 0;
+
+  // equity curve + drawdown
+  let equity = state.account.balance, peak = equity, maxDD=0, maxDDPct=0;
+  const curve = [equity];
+  for(const j of J){
+    equity += j.dollarPL;
+    curve.push(equity);
+    if(equity>peak) peak=equity;
+    const dd = peak-equity;
+    if(dd>maxDD) maxDD=dd;
+    const ddPct = peak>0 ? dd/peak*100 : 0;
+    if(ddPct>maxDDPct) maxDDPct=ddPct;
+  }
+
+  // consecutive win/loss streaks (BE breaks streak)
+  let curWin=0,curLoss=0,maxWin=0,maxLoss=0;
+  for(const j of J){
+    if(j.result==='WIN'){ curWin++; curLoss=0; if(curWin>maxWin)maxWin=curWin; }
+    else if(j.result==='LOSS'){ curLoss++; curWin=0; if(curLoss>maxLoss)maxLoss=curLoss; }
+    else { curWin=0; curLoss=0; }
+  }
+
+  return { total,wins,losses,bes,winrate,profitFactor,netPL,avgR,expectancyDollar,maxDD,maxDDPct,maxWin,maxLoss,curve };
+}
+
+function renderStats(){
+  const s = computeStats();
+  const wrap = document.getElementById('statsWrap');
+  const pf = isFinite(s.profitFactor) ? s.profitFactor.toFixed(2) : '∞';
+  wrap.innerHTML = `
+    <div class="row3">
+      <div class="statbox"><div class="v">${s.total}</div><div class="l">Total Trades</div></div>
+      <div class="statbox"><div class="v pos">${s.wins}</div><div class="l">Wins</div></div>
+      <div class="statbox"><div class="v neg">${s.losses}</div><div class="l">Losses</div></div>
+      <div class="statbox"><div class="v">${s.bes}</div><div class="l">Break-even</div></div>
+      <div class="statbox"><div class="v">${s.winrate.toFixed(1)}%</div><div class="l">Win Rate</div></div>
+      <div class="statbox"><div class="v">${pf}</div><div class="l">Profit Factor</div></div>
+      <div class="statbox"><div class="v ${s.netPL>=0?'pos':'neg'}">${s.netPL>=0?'+':''}$${s.netPL.toFixed(2)}</div><div class="l">Net P/L</div></div>
+      <div class="statbox"><div class="v ${s.avgR>=0?'pos':'neg'}">${s.avgR>=0?'+':''}${s.avgR.toFixed(2)}R</div><div class="l">Average R</div></div>
+      <div class="statbox"><div class="v ${s.expectancyDollar>=0?'pos':'neg'}">$${s.expectancyDollar.toFixed(2)}</div><div class="l">Expectancy/Trade</div></div>
+      <div class="statbox"><div class="v neg">$${s.maxDD.toFixed(2)}</div><div class="l">Max Drawdown</div></div>
+      <div class="statbox"><div class="v neg">${s.maxDDPct.toFixed(1)}%</div><div class="l">Max DD %</div></div>
+      <div class="statbox"><div class="v pos">${s.maxWin}</div><div class="l">Max Win Streak</div></div>
+      <div class="statbox"><div class="v neg">${s.maxLoss}</div><div class="l">Max Loss Streak</div></div>
+    </div>
+    <div class="card" style="margin-top:8px;">
+      <b style="font-size:11px; color:var(--text-dim);">EQUITY CURVE</b>
+      <canvas id="equityCanvas" style="width:100%; height:140px; display:block; margin-top:4px;"></canvas>
+    </div>
+  `;
+  drawEquityCurve(s.curve);
+}
+
+function drawEquityCurve(curve){
+  const cv = document.getElementById('equityCanvas');
+  if(!cv) return;
+  const dpr = window.devicePixelRatio||1;
+  const rect = cv.getBoundingClientRect();
+  cv.width = rect.width*dpr; cv.height = rect.height*dpr;
+  const c = cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
+  const W=rect.width, H=rect.height;
+  c.clearRect(0,0,W,H);
+  if(curve.length<2){ c.fillStyle='#787b86'; c.font='11px Arial'; c.fillText('No trades yet', 10, H/2); return; }
+  const min=Math.min(...curve), max=Math.max(...curve);
+  const range=(max-min)||1;
+  const x = i => (i/(curve.length-1))*(W-10)+5;
+  const y = v => H-8 - (v-min)/range*(H-16);
+  c.strokeStyle = curve[curve.length-1]>=curve[0] ? '#089981' : '#f23645';
+  c.lineWidth=1.5;
+  c.beginPath();
+  curve.forEach((v,i)=>{ i===0?c.moveTo(x(i),y(v)):c.lineTo(x(i),y(v)); });
+  c.stroke();
+  c.strokeStyle='#787b86'; c.setLineDash([3,3]); c.beginPath();
+  c.moveTo(0,y(curve[0])); c.lineTo(W,y(curve[0])); c.stroke(); c.setLineDash([]);
+}
+
+/* =========================================================================
+   SETTINGS PANEL (account, pair, data import, session save)
+   ========================================================================= */
+function renderSettings(){
+  const wrap = document.getElementById('settingsWrap');
+  wrap.innerHTML = `
+    <div class="card">
+      <b style="font-size:11px; color:var(--text-dim);">ACCOUNT</b>
+      <div class="row2">
+        <div><label>Pair</label><input id="setPair" value="${state.pair}"></div>
+        <div><label>Balance $</label><input id="setBalance" type="number" value="${state.account.balance}"></div>
+      </div>
+      <div class="row2">
+        <div><label>Default Risk %</label><input id="setRisk" type="number" step="0.1" value="${state.account.riskPercent}"></div>
+        <div><label>Contract Size</label><input id="setContract" type="number" value="${state.account.contractSize}"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <b style="font-size:11px; color:var(--text-dim);">REAL DATA IMPORT</b>
+      <p style="font-size:11px; color:var(--text-dim); line-height:1.5;">
+        Load real, timestamped OHLC data straight from a file - no pasting needed. Supports the
+        app's simple <code>Date,Open,High,Low,Close</code> format AND HistData's Generic ASCII
+        M1 export (<code>YYYYMMDD HHMMSS;O;H;L;C;Vol</code>, semicolon-delimited) - delimiter and
+        date format are auto-detected. <b>1-minute data unlocks all 9 timeframes.</b>
+      </p>
+      <label class="filepicker-wrap" id="filePickerArea">
+        <div class="bigbtn filepicker-visible" id="btnChooseFile" style="background:var(--up); color:#fff;">📁 Choose CSV File</div>
+        <input type="file" id="csvFileInput" accept=".csv,.txt,text/csv,text/plain" class="filepicker-input">
+      </label>
+      <div id="importSummary" style="font-size:11px; color:var(--text-dim); margin-top:6px; line-height:1.5;"></div>
+
+      <label style="margin-top:10px;">Or paste CSV manually</label>
+      <textarea id="csvInput" rows="4" style="width:100%;" placeholder="Date,Open,High,Low,Close&#10;2026-01-05 09:00,1.2650,1.2658,1.2645,1.2655&#10;..."></textarea>
+      <button class="bigbtn" id="btnImport" style="background:var(--accent); color:#fff; margin-top:6px;">Import Pasted Data</button>
+    </div>
+
+    <div class="card">
+      <b style="font-size:11px; color:var(--text-dim);">SESSION SAVE / LOAD</b>
+      <p style="font-size:11px; color:var(--text-dim); line-height:1.5;">
+        Saves everything to this browser (offline, no server): imported candles, replay cursor,
+        timeframe, chart zoom/pan, all drawings, open trade, journal and account settings -
+        so you can pick up exactly where you left off.
+      </p>
+      <div class="row2">
+        <button class="bigbtn" id="btnSaveSession" style="background:var(--up); color:#fff;">💾 Save Session</button>
+        <button class="bigbtn" id="btnLoadSession" style="background:var(--accent); color:#fff;">📂 Load Session</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <b style="font-size:11px; color:var(--text-dim);">REPLAY SESSION</b>
+      <div class="row2">
+        <button class="bigbtn" id="btnRandomStart">🎲 New Random Start</button>
+        <button class="bigbtn" id="btnClearJournal" style="background:var(--down); color:#fff;">Clear Journal</button>
+      </div>
+      <p style="font-size:11px; color:var(--text-dim); margin-top:6px;">
+        Random Start resets drawings &amp; the open trade to a fresh unseen point in your data.
+        Your journal and stats persist across sessions automatically.
+      </p>
+    </div>
+  `;
+  document.getElementById('setPair').onchange = e=>{ state.pair=e.target.value.toUpperCase()||'GBPUSD'; document.getElementById('pairLabel').textContent=state.pair; autosave(); };
+  document.getElementById('setBalance').oninput = e=>{ state.account.balance=parseFloat(e.target.value)||0; autosave(); renderTradeForm(); };
+  document.getElementById('setRisk').oninput = e=>{ state.account.riskPercent=parseFloat(e.target.value)||0; autosave(); };
+  document.getElementById('setContract').oninput = e=>{ state.account.contractSize=parseFloat(e.target.value)||100000; autosave(); renderTradeForm(); };
+  document.getElementById('btnImport').onclick = ()=> loadRealData(document.getElementById('csvInput').value);
+  // NOTE: no JS .click() trigger here on purpose - #csvFileInput is a real,
+  // fully-tappable file input physically stacked on top of the visible
+  // "Choose CSV File" button (see .filepicker-wrap / .filepicker-input CSS),
+  // so Android's native file picker opens from the tap itself. The change
+  // handler below fires the same import pipeline no matter how it opened.
+  document.getElementById('csvFileInput').onchange = (e)=>{
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const summaryEl = document.getElementById('importSummary');
+    if(summaryEl) summaryEl.textContent = `Reading ${file.name} (${(file.size/1024/1024).toFixed(1)} MB) ...`;
+    toast(`Reading ${file.name} ...`, 2000);
+    const reader = new FileReader();
+    reader.onerror = ()=>{
+      toast('Could not read that file');
+      if(summaryEl) summaryEl.textContent = 'File read failed - please try again.';
+    };
+    reader.onload = ()=>{
+      // defer parsing one tick so the "Reading..." status actually paints
+      // before the (potentially heavy, e.g. ~20MB M1 file) synchronous parse
+      setTimeout(()=>{ loadRealData(reader.result); }, 0);
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // allow re-selecting the same file later
+  };
+  document.getElementById('btnSaveSession').onclick = saveSession;
+  document.getElementById('btnLoadSession').onclick = loadSession;
+  document.getElementById('btnRandomStart').onclick = randomStart;
+  document.getElementById('btnClearJournal').onclick = ()=>{
+    if(confirm('Clear the entire trade journal? This cannot be undone.')){
+      state.journal=[]; state.tradeCounter=0; autosave(); renderJournal(); renderStats();
+      toast('Journal cleared');
+    }
+  };
+}
+
+/* =========================================================================
+   UI WIRING
+   ========================================================================= */
+// timeframe chips
+document.querySelectorAll('.tf-chip').forEach(el=>{
+  el.addEventListener('click', ()=> setTimeframe(parseInt(el.dataset.tf,10)));
+});
+
+// drawer tabs (top bar icons + drawer's own tab strip both open/switch tabs)
+const drawer = document.getElementById('drawer');
+let currentTab = 'draw';
+function openTab(tab){
+  currentTab = tab;
+  document.querySelectorAll('.dpanel').forEach(p=>p.classList.toggle('active', p.id==='panel-'+tab));
+  document.querySelectorAll('#drawerTabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  drawer.classList.remove('collapsed');
+  if(tab==='trade') renderTradeForm();
+  if(tab==='journal') renderJournal();
+  if(tab==='stats') renderStats();
+  if(tab==='settings') renderSettings();
+  // Opening a different panel can change the chart's usable height. Let the
+  // browser finish the panel layout, then resize the canvas before the next
+  // touch is interpreted.
+  requestAnimationFrame(()=>{ resizeCanvas(); renderChart(); });
+}
+document.querySelectorAll('#topbar .icon-btn[data-tab]').forEach(el=>{
+  el.addEventListener('click', ()=>{
+    const tab = el.dataset.tab;
+    if(!drawer.classList.contains('collapsed') && currentTab===tab){ drawer.classList.add('collapsed'); return; }
+    openTab(tab);
+  });
+});
+document.querySelectorAll('#drawerTabs button').forEach(el=>{
+  el.addEventListener('click', ()=> openTab(el.dataset.tab));
+});
+
+// drawing tool strip toggle + tool selection
+const toolStrip = document.getElementById('toolStrip');
+document.getElementById('btnDrawToggle').addEventListener('click', ()=>{
+  toolStrip.style.display = toolStrip.style.display==='flex' ? 'none' : 'flex';
+});
+document.querySelectorAll('#toolStrip button[data-tool]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#toolStrip button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const tool = btn.dataset.tool;
+    state.inputMode = (tool==='edit' || tool==='delete') ? tool : 'draw:'+tool;
+    state.pendingAnchor = null;
+    updateModeBanner(tool==='edit' ? 'Drag a drawing or its handles to adjust it' : tool==='delete' ? 'Tap a drawing to delete it' : `Tap chart to place ${btn.textContent}`);
+  });
+});
+
+// TradingView-style crosshair
+const crosshairBtn=document.getElementById('btnCrosshair');
+if(crosshairBtn){ crosshairBtn.addEventListener('click',()=>{
+  state.crosshair.enabled=!state.crosshair.enabled;
+  crosshairBtn.classList.toggle('active',state.crosshair.enabled);
+  if(state.crosshair.enabled) updateModeBanner('Crosshair ON · drag on chart to inspect candle');
+  else { updateModeBanner(null); const el=document.getElementById('crosshairInfo'); if(el) el.style.display='none'; }
+  renderChart();
+}); }
+
+// replay + view controls
+document.getElementById('btnNext').addEventListener('click', nextCandle);
+document.getElementById('btnPrev').addEventListener('click', prevCandle);
+document.getElementById('btnRandom').addEventListener('click', randomStart);
+document.getElementById('btnResetView').addEventListener('click', ()=>{
+  state.view.count = 80;
+  state.view.startIdx = Math.max(0, state.resampled.length-80);
+  state.priceScale = {zoom:1, center:null, span:null};
+  renderChart();
+});
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+(function init(){
+  loadAutosave();
+  document.getElementById('pairLabel').textContent = state.pair;
+  applyTimeframeAvailability();
+  resizeCanvas();
+  renderChart();
+  renderTradeForm();
+  renderJournal();
+  renderStats();
+  renderSettings();
+  openTab('settings'); // start on Settings so the CSV import box is right there
+})();
+</script>
+
+</body>
+</html>
